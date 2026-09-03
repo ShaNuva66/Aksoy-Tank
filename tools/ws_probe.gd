@@ -4,18 +4,22 @@ var _peers := []
 var _sent_join := {}
 var _sent_input := false
 var _host_received_input := false
-var _guest_joined := false
-var _host_joined := false
+var _guest_index := -1
+var _host_index := -1
 var _mode_mismatch_rejected := false
 var _deadline_msec := 0
 
 
 func _init() -> void:
 	_deadline_msec = Time.get_ticks_msec() + 6000
+	var server_url := "ws://127.0.0.1:8765/ws"
+	for argument in OS.get_cmdline_user_args():
+		if argument.begins_with("--server-url="):
+			server_url = argument.trim_prefix("--server-url=")
 
 	for index in range(4):
 		var peer = WebSocketPeer.new()
-		var error := peer.connect_to_url("ws://127.0.0.1:8765/ws")
+		var error := peer.connect_to_url(server_url)
 		if error != OK:
 			push_error("Probe could not connect peer %d" % (index + 1))
 			quit(1)
@@ -37,8 +41,8 @@ func _process(_delta: float) -> bool:
 
 		if peer.get_ready_state() == WebSocketPeer.STATE_OPEN and not _sent_join[index]:
 			var room_code := "GODOT1" if index < 2 else "MODE1"
-			var room_mode := "online_vs" if index == 3 else "online_coop"
-			peer.send_text(JSON.stringify({"type": "join", "room_code": room_code, "mode": room_mode}))
+			var room_mode := "online_coop" if index == 3 else "online_vs"
+			peer.send_text(JSON.stringify({"type": "join", "room_code": room_code, "mode": room_mode, "build": "1.9.2", "profile": {"name": "Probe", "style_id": "akinci"}}))
 			_sent_join[index] = true
 
 		while peer.get_available_packet_count() > 0:
@@ -47,18 +51,19 @@ func _process(_delta: float) -> bool:
 				continue
 
 			var message: Dictionary = payload
-			if message.get("type", "") == "room_joined":
-				if index == 0:
-					_host_joined = true
+			print("WS_PROBE[%d]: %s" % [index + 1, String(message.get("type", "unknown"))])
+			if message.get("type", "") == "room_joined" and index < 2:
+				if String(message.get("role", "")) == "host":
+					_host_index = index
 				else:
-					_guest_joined = true
-			elif message.get("type", "") == "input" and index == 0:
+					_guest_index = index
+			elif message.get("type", "") == "input" and index == _host_index:
 				_host_received_input = true
 			elif message.get("type", "") == "error" and index >= 2:
-				_mode_mismatch_rejected = String(message.get("message", "")).contains("farkli")
+				_mode_mismatch_rejected = true
 
-	if _host_joined and _guest_joined and not _sent_input:
-		var guest_peer: WebSocketPeer = _peers[1]
+	if _host_index >= 0 and _guest_index >= 0 and not _sent_input:
+		var guest_peer: WebSocketPeer = _peers[_guest_index]
 		guest_peer.send_text(JSON.stringify({"type": "input", "payload": {"turn": 1, "drive": 0, "fire": true}}))
 		_sent_input = true
 

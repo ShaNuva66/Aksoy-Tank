@@ -1,12 +1,16 @@
 # Mobil Oyun Projesi
 
+> Bu klasor Aksoy Tank'in iOS/App Store icin ayrilmis kopyasidir. Android ana
+> proje degistirilmemistir. Baslangic ve yukleme adimlari icin once
+> `docs/ios-app-store-release.md` dosyasini okuyun.
+
 Bu klasor, `backend` projesinden tamamen bagimsiz yeni bir mobil oyun calisma alani olarak olusturuldu.
 
 Secilen yapi:
 
 - Motor: Godot 4.x
 - Dil: GDScript
-- Hedef: Android ve Google Play
+- Hedef: iPhone ve Apple App Store (ilk surum tek oyunculu)
 - Tur: klasik ustten bakisli tank savasindan ilham alan ozgun 2D arcade aksiyon
 - Calisma adi: `Aksoy Tank`
 
@@ -62,7 +66,7 @@ Kopyalanmayacaklar:
 - oynanabilir prototip arena
 - oyuncu tank hareketi ve atesi
 - 1P solo oyun modu
-- oda kodlu online 2P co-op ve VS altyapisi
+- oda kodlu, internet uzerinden online 1V1 modu
 - 4 dusman arketipi: grunt, scout, brute, sniper
 - dusmanlardan dusen pickup sistemi: repair, shield, overdrive, turbo, fortify
 - stage bazli renk paleti ve atmosfer temalari
@@ -72,7 +76,7 @@ Kopyalanmayacaklar:
 - mobil analog joystick ve ates kontrol katmani
 - sabit arena kamera yapisi ve cache'li dusman hedef secimi
 - mermi hareketinde normalize maliyetini azaltan hafif optimizasyonlar
-- `WebSocket` relay server uzerinden host-authoritative co-op ve VS eslesmesi
+- guvenli `WSS` relay uzerinden host-authoritative 1V1 eslesmesi
 
 ## Kontroller
 
@@ -90,12 +94,31 @@ python -m pip install -r .\online-relay\requirements.txt
 python .\online-relay\server.py
 ```
 
-- Varsayilan baglanti adresi: `ws://127.0.0.1:8765/ws`
-- Gercek internet yayini icin bu relay'i VPS veya bulut uzerinde `wss://` ile yayinlamak ve menudeki sunucu adresini bu adrese ayarlamak gerekir.
+- Magaza baglanti adresi: `wss://atify.com.tr/aksoy-tank/ws`
+- Relay Docker'da ozel agda calisir; 8765 portu internete acilmaz ve TLS Caddy tarafindan sonlandirilir.
 
 ## Build ve Yayin
 
-- Android export presetleri hazir: `export_presets.cfg`
+### iOS / App Store
+
+- Bundle ID: `com.atalay.aksoytank`
+- Surum: `1.5.0` (build `15`)
+- Minimum sistem: iOS 15.0
+- Hedef cihaz: iPhone, yatay ekran, arm64
+- Preset: `iOS`
+- Magaza ikonu: `assets/store/icons/ios-app-icon-1024.png`
+- Yapilandirma: `tools/configure_ios.ps1`
+- On kontrol: `tools/validate_ios_release.ps1`
+- Mac export: `tools/export_ios_on_mac.sh`
+- Tam kilavuz: `docs/ios-app-store-release.md`
+
+Godot iOS exportu ve Apple imzalama islemi macOS ile Xcode gerektirir. Windows
+klasoru kaynak, preset, ikon, ekran goruntusu ve magaza metinlerini hazirlar;
+son `.xcarchive` ve App Store yuklemesi Mac'te yapilir.
+
+### Android arsivi
+
+- Android export preseti referans amaciyla korunmustur: `export_presets.cfg`
 - Store iconlari ve feature graphic uretimi: `tools/generate_store_assets.ps1`
 - Signed AAB export denemesi ve yayin dosya hazirligi: `tools/export_android.ps1`
 - Store screenshot capture akisi: `tools/capture_store_screens.ps1`

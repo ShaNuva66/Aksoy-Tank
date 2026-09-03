@@ -37,23 +37,8 @@ func _run() -> void:
 	if pause_overlay == null or pause_button == null:
 		_fail("Pause UI not found")
 		return
-
-	await _tap_arena(pause_button.get_global_rect().get_center(), 1)
-	await _wait_frames(3)
-	if not pause_overlay.visible:
-		_fail("Pause overlay did not open from touch")
-		return
-
-	var resume_button := current_scene.get_node_or_null("Hud/PauseOverlay/CenterContainer/Panel/Margin/VBox/ResumeButton")
-	if resume_button == null:
-		_fail("Resume button not found")
-		return
-
-	await _tap_arena(resume_button.get_global_rect().get_center(), 1)
-	await _wait_frames(3)
-
-	if pause_overlay.visible:
-		_fail("Pause overlay did not close from touch")
+	if pause_button.visible or pause_overlay.visible:
+		_fail("Removed top pause UI is still visible")
 		return
 
 	var mobile_controls := current_scene.get_node_or_null("MobileControls")

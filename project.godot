@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Aksoy Tank"
-config/version="1.4.0"
+config/version="1.9.2"
 run/main_scene="res://src/scenes/main_menu.tscn"
 config/features=PackedStringArray("4.6")
 config/icon="res://assets/ui/icon.png"
@@ -27,12 +27,22 @@ window/size/viewport_width=1280
 window/size/viewport_height=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+window/handheld/orientation=0
+window/ios/hide_home_indicator=true
+window/ios/hide_status_bar=true
+window/ios/suppress_ui_gesture=true
+window/ios/allow_high_refresh_rate=true
 
 [input_devices]
 
 pointing/emulate_mouse_from_touch=true
 pointing/emulate_touch_from_mouse=false
 
+[physics]
+
+common/physics_interpolation=true
+
 [rendering]
 
+anti_aliasing/quality/msaa_2d=1
 renderer/rendering_method="gl_compatibility"

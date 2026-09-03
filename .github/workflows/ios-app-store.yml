@@ -17,7 +17,7 @@ env:
 jobs:
   build-and-upload:
     name: iOS build ve yukleme
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 60
 
     steps:
@@ -42,7 +42,15 @@ jobs:
           exit "$missing"
 
       - name: Xcode bilgisini goster
-        run: xcodebuild -version
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          sdk_version="$(xcrun --sdk iphoneos --show-sdk-version)"
+          echo "iPhoneOS SDK: $sdk_version"
+          if (( ${sdk_version%%.*} < 26 )); then
+            echo "App Store yuklemesi icin iOS 26 SDK veya daha yenisi gerekli."
+            exit 1
+          fi
 
       - name: Godot ve iOS export sablonlarini kur
         run: |

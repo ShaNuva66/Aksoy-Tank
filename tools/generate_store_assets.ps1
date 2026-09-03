@@ -250,6 +250,35 @@ function Write-MainIcon {
 	Save-Bitmap -Bitmap $ctx.Bitmap -Path $Path
 }
 
+function Write-IOSAppIcon {
+	param(
+		[string]$Path
+	)
+
+	$size = 1024
+	# App Store icons must be square, must not contain transparency, and must
+	# not have pre-rounded corners. iOS applies the final mask on the device.
+	$bitmap = New-Object System.Drawing.Bitmap $size, $size, ([System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
+	$graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+	$graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+	$graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+	$graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+
+	$backgroundBrush = New-Object System.Drawing.Drawing2D.LinearGradientBrush ([System.Drawing.PointF]::new(0, 0)), ([System.Drawing.PointF]::new($size, $size)), ([System.Drawing.ColorTranslator]::FromHtml("#121820")), ([System.Drawing.ColorTranslator]::FromHtml("#325066"))
+	$graphics.FillRectangle($backgroundBrush, 0, 0, $size, $size)
+	$backgroundBrush.Dispose()
+
+	Draw-Grid -Graphics $graphics -Width $size -Height $size -Color ([System.Drawing.Color]::FromArgb(22, 255, 255, 255)) -Spacing 96
+	$accentBrush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(42, 127, 176, 105))
+	$graphics.FillEllipse($accentBrush, $size * 0.1, $size * 0.1, $size * 0.8, $size * 0.8)
+	$accentBrush.Dispose()
+	Draw-CitaforgeEmblem -Graphics $graphics -CenterX ($size * 0.5) -CenterY ($size * 0.54) -Radius ($size * 0.27)
+
+	$graphics.Dispose()
+	$bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+	$bitmap.Dispose()
+}
+
 function Write-AdaptiveBackground {
 	param(
 		[int]$Size,
@@ -333,6 +362,7 @@ function Write-FeatureGraphic {
 
 Write-MainIcon -Size 192 -Path (Join-Path $iconDir "android-main-192.png")
 Write-MainIcon -Size 512 -Path (Join-Path $listingDir "google-play-icon-512.png")
+Write-IOSAppIcon -Path (Join-Path $iconDir "ios-app-icon-1024.png")
 Write-AdaptiveBackground -Size 432 -Path (Join-Path $iconDir "android-adaptive-background-432.png")
 Write-AdaptiveForeground -Size 432 -Path (Join-Path $iconDir "android-adaptive-foreground-432.png")
 Write-AdaptiveForeground -Size 432 -Path (Join-Path $iconDir "android-adaptive-monochrome-432.png") -Monochrome $true

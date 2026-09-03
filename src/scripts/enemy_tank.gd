@@ -390,7 +390,9 @@ func _ready() -> void:
 	add_to_group("tanks")
 	collision_layer = 1
 	collision_mask = 2
-	safe_margin = 1.0
+	motion_mode = CharacterBody2D.MOTION_MODE_FLOATING
+	safe_margin = 0.2
+	max_slides = 8
 	_arena = get_tree().current_scene
 	_rng.randomize()
 	_apply_profile()
@@ -434,9 +436,12 @@ func _physics_process(delta: float) -> void:
 		_lane_lock_time = maxf(_lane_lock_time - delta * 2.4, 0.0)
 
 	rotation = Vector2.UP.angle_to(_move_direction)
-	velocity = _move_direction * _speed
+	var desired_velocity := _move_direction * _speed
+	velocity = TankSpacing.adjust_velocity_for_tanks(self, desired_velocity, get_tank_spacing_radius())
 	move_and_slide()
-	TankSpacing.apply_soft_separation(self, get_tank_collision_radius(), delta)
+	TankSpacing.apply_soft_separation(self, get_tank_spacing_radius(), delta)
+	if desired_velocity.length_squared() > 0.0 and velocity.dot(desired_velocity.normalized()) < _speed * 0.2:
+		_direction_timer = 0.0
 
 	if get_slide_collision_count() > 0:
 		_pick_new_direction()
@@ -493,6 +498,23 @@ func get_team() -> String:
 
 func get_tank_collision_radius() -> float:
 	return _collider_radius
+
+
+func get_damage_hitbox_size() -> Vector2:
+	var body_size := Vector2(44.0, 48.0)
+	if enemy_type == "brute":
+		body_size = Vector2(48.0, 52.0)
+	elif enemy_type == "scout":
+		body_size = Vector2(40.0, 44.0)
+	elif enemy_type == "warden":
+		body_size = Vector2(50.0, 54.0)
+	elif _is_boss_type():
+		body_size = Vector2(56.0, 62.0)
+	return body_size * _visual_scale * 0.9
+
+
+func get_tank_spacing_radius() -> float:
+	return maxf(_collider_radius, get_damage_hitbox_size().x * 0.5)
 
 
 func take_hit(_source_team: String = "", damage: int = 1) -> bool:
@@ -590,6 +612,7 @@ func _spawn_bullet(angle_offset: float) -> void:
 	var final_rotation := rotation + angle_offset
 	var bullet = BULLET_SCENE.instantiate()
 	bullet.global_position = global_position + Vector2.UP.rotated(final_rotation) * (42.0 * _visual_scale)
+	bullet.set_spawn_sweep_origin(global_position)
 	bullet.rotation = final_rotation
 	bullet.direction = Vector2.UP.rotated(final_rotation)
 	bullet.owner_team = team
@@ -633,6 +656,21 @@ func _apply_profile() -> void:
 			circle_shape.resource_local_to_scene = true
 			collision_shape.shape = circle_shape
 		circle_shape.radius = _collider_radius
+	_configure_damage_hurtbox()
+
+
+func _configure_damage_hurtbox() -> void:
+	var hurtbox_shape: CollisionShape2D = get_node_or_null("Hurtbox/CollisionShape2D")
+	if hurtbox_shape == null or not (hurtbox_shape.shape is CapsuleShape2D):
+		return
+	var capsule := hurtbox_shape.shape as CapsuleShape2D
+	if not capsule.resource_local_to_scene:
+		capsule = capsule.duplicate()
+		capsule.resource_local_to_scene = true
+		hurtbox_shape.shape = capsule
+	var hitbox_size := get_damage_hitbox_size()
+	capsule.radius = hitbox_size.x * 0.5
+	capsule.height = maxf(hitbox_size.y, hitbox_size.x)
 
 
 func _is_boss_type() -> bool:

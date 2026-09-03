@@ -11,6 +11,7 @@ const BlackCatTheme := preload("res://src/scripts/black_cat_theme.gd")
 @onready var previous_stage_button: Button = $CenterContainer/Panel/Margin/VBox/StageRow/PrevStageButton
 @onready var next_stage_button: Button = $CenterContainer/Panel/Margin/VBox/StageRow/NextStageButton
 @onready var stage_title_label: Label = $CenterContainer/Panel/Margin/VBox/StageRow/StageTitleLabel
+@onready var stage_row: HBoxContainer = $CenterContainer/Panel/Margin/VBox/StageRow
 @onready var stage_detail_label: Label = $CenterContainer/Panel/Margin/VBox/StageDetailLabel
 @onready var progress_label: Label = $CampaignProgressLabel
 @onready var credits_label: Label = $CreditsLabel
@@ -20,9 +21,17 @@ const BlackCatTheme := preload("res://src/scripts/black_cat_theme.gd")
 @onready var online_config: VBoxContainer = $CenterContainer/Panel/Margin/VBox/OnlineConfig
 @onready var room_label: Label = $CenterContainer/Panel/Margin/VBox/OnlineConfig/RoomRow/RoomLabel
 @onready var room_code_edit: LineEdit = $CenterContainer/Panel/Margin/VBox/OnlineConfig/RoomRow/RoomCodeEdit
+@onready var server_row: HBoxContainer = $CenterContainer/Panel/Margin/VBox/OnlineConfig/ServerRow
 @onready var server_label: Label = $CenterContainer/Panel/Margin/VBox/OnlineConfig/ServerRow/ServerLabel
 @onready var server_url_edit: LineEdit = $CenterContainer/Panel/Margin/VBox/OnlineConfig/ServerRow/ServerUrlEdit
 @onready var online_status_label: Label = $CenterContainer/Panel/Margin/VBox/OnlineConfig/OnlineStatusLabel
+@onready var player_name_label: Label = $CenterContainer/Panel/Margin/VBox/OnlineConfig/ProfileCard/ProfileFields/NameRow/NameLabel
+@onready var player_name_edit: LineEdit = $CenterContainer/Panel/Margin/VBox/OnlineConfig/ProfileCard/ProfileFields/NameRow/PlayerNameEdit
+@onready var style_caption: Label = $CenterContainer/Panel/Margin/VBox/OnlineConfig/ProfileCard/ProfileFields/StyleRow/StyleCaption
+@onready var style_label: Label = $CenterContainer/Panel/Margin/VBox/OnlineConfig/ProfileCard/ProfileFields/StyleRow/StyleLabel
+@onready var previous_style_button: Button = $CenterContainer/Panel/Margin/VBox/OnlineConfig/ProfileCard/ProfileFields/StyleRow/PrevStyleButton
+@onready var next_style_button: Button = $CenterContainer/Panel/Margin/VBox/OnlineConfig/ProfileCard/ProfileFields/StyleRow/NextStyleButton
+@onready var tank_preview: Control = $CenterContainer/Panel/Margin/VBox/OnlineConfig/ProfileCard/TankPreview
 @onready var reset_progress_button: Button = $CenterContainer/Panel/Margin/VBox/ResetProgressButton
 @onready var delete_confirm_dialog: ConfirmationDialog = $DeleteConfirmDialog
 @onready var delete_confirm_final_dialog: ConfirmationDialog = $DeleteConfirmFinalDialog
@@ -36,6 +45,9 @@ var _button_feedback_tweens: Dictionary = {}
 
 func _ready() -> void:
 	_apply_black_cat_theme()
+	mode_row.visible = GameSession.is_online_available()
+	server_row.visible = false
+	server_url_edit.editable = false
 	start_button.pressed.connect(_on_start_button_pressed)
 	previous_stage_button.pressed.connect(_on_previous_stage_button_pressed)
 	next_stage_button.pressed.connect(_on_next_stage_button_pressed)
@@ -46,6 +58,9 @@ func _ready() -> void:
 	delete_confirm_final_dialog.confirmed.connect(_on_delete_confirm_final_dialog_confirmed)
 	_connect_button_feedback()
 	room_code_edit.text_changed.connect(_on_room_code_changed)
+	player_name_edit.text_changed.connect(_on_player_name_changed)
+	previous_style_button.pressed.connect(_on_previous_style_pressed)
+	next_style_button.pressed.connect(_on_next_style_pressed)
 	server_url_edit.text_changed.connect(_on_server_url_changed)
 	GameSession.progress_changed.connect(_refresh_stage_info)
 	NetSession.status_changed.connect(_on_net_status_changed)
@@ -70,14 +85,18 @@ func _apply_black_cat_theme() -> void:
 	credits_label.add_theme_color_override("font_color", BlackCatTheme.MUTED.darkened(0.08))
 	session_mode_label.add_theme_color_override("font_color", BlackCatTheme.ACCENT)
 	room_label.add_theme_color_override("font_color", BlackCatTheme.MUTED)
+	player_name_label.add_theme_color_override("font_color", BlackCatTheme.MUTED)
+	style_caption.add_theme_color_override("font_color", BlackCatTheme.MUTED)
+	style_label.add_theme_color_override("font_color", BlackCatTheme.ACCENT_SOFT)
 	server_label.add_theme_color_override("font_color", BlackCatTheme.MUTED)
 	online_status_label.add_theme_color_override("font_color", BlackCatTheme.MUTED)
 
-	for button in [start_button, reset_progress_button, previous_stage_button, next_stage_button, previous_mode_button, next_mode_button]:
+	for button in [start_button, reset_progress_button, previous_stage_button, next_stage_button, previous_mode_button, next_mode_button, previous_style_button, next_style_button]:
 		var accent := BlackCatTheme.ACCENT if button == start_button else BlackCatTheme.border_mix(BlackCatTheme.ACCENT, BlackCatTheme.TEXT, 0.18)
 		BlackCatTheme.apply_button(button, accent, BlackCatTheme.SURFACE)
 
 	BlackCatTheme.apply_line_edit(room_code_edit)
+	BlackCatTheme.apply_line_edit(player_name_edit)
 	BlackCatTheme.apply_line_edit(server_url_edit)
 
 
@@ -226,7 +245,7 @@ func _exit_tree() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		if room_code_edit.has_focus() or server_url_edit.has_focus():
+		if room_code_edit.has_focus() or server_url_edit.has_focus() or player_name_edit.has_focus():
 			return
 
 		if event.keycode == KEY_LEFT:
@@ -251,6 +270,13 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _on_start_button_pressed() -> void:
 	if GameSession.is_online_mode():
+		if GameSession.get_player_name().length() < 3:
+			online_status_label.text = "Oyuncu adı en az 3 karakter olmalı."
+			player_name_edit.grab_focus()
+			return
+		if GameSession.get_room_code().length() < 4:
+			online_status_label.text = "Oda kodu en az 4 karakter olmali."
+			return
 		start_button.disabled = true
 		online_status_label.text = "Sunucuya baglaniliyor..."
 		NetSession.connect_to_room(GameSession.get_server_url(), GameSession.get_room_code(), GameSession.get_session_mode())
@@ -302,6 +328,21 @@ func _on_server_url_changed(new_text: String) -> void:
 	GameSession.set_server_url(new_text)
 
 
+func _on_player_name_changed(new_text: String) -> void:
+	GameSession.set_player_name(new_text)
+	if player_name_edit.text != GameSession.get_player_name():
+		player_name_edit.text = GameSession.get_player_name()
+		player_name_edit.caret_column = player_name_edit.text.length()
+
+
+func _on_previous_style_pressed() -> void:
+	GameSession.shift_tank_style(-1)
+
+
+func _on_next_style_pressed() -> void:
+	GameSession.shift_tank_style(1)
+
+
 func _on_net_status_changed(_state: String, message: String) -> void:
 	online_status_label.text = message
 	start_button.disabled = GameSession.is_online_mode() and NetSession.get_status() in [NetSession.STATUS_CONNECTING, NetSession.STATUS_JOINING]
@@ -324,14 +365,22 @@ func _refresh_stage_info() -> void:
 	progress_label.text = "Campaign %d/%d" % [unlocked_count, stage["total_stages"]]
 	session_mode_label.text = GameSession.get_session_mode_label()
 	room_code_edit.text = GameSession.get_room_code()
+	if player_name_edit.text != GameSession.get_player_name():
+		player_name_edit.text = GameSession.get_player_name()
+	var tank_style := GameSession.get_tank_style()
+	style_label.text = String(tank_style.get("label", "AKINCI"))
+	if tank_preview.has_method("set_profile"):
+		tank_preview.set_profile(GameSession.get_network_profile())
 	server_url_edit.text = GameSession.get_server_url()
 	online_config.visible = GameSession.is_online_mode()
+	stage_row.visible = not GameSession.is_online_mode()
+	reset_progress_button.visible = not GameSession.is_online_mode()
 	previous_stage_button.disabled = stage["index"] <= 0
 	next_stage_button.disabled = stage["index"] >= unlocked_count - 1
-	previous_mode_button.disabled = GameSession.get_session_mode() == "solo"
-	next_mode_button.disabled = GameSession.get_session_mode() == "online_vs"
+	previous_mode_button.disabled = not GameSession.is_online_available() or GameSession.get_session_mode() == "solo"
+	next_mode_button.disabled = not GameSession.is_online_available() or GameSession.get_session_mode() == "online_vs"
 	if GameSession.is_online_vs():
-		start_button.text = "VS ODASINA GIR"
+		start_button.text = "1V1 ODASINA GIR"
 	elif GameSession.is_online_coop():
 		start_button.text = "CO-OP ODASINA GIR"
 	else:

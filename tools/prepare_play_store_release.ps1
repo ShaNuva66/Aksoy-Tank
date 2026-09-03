@@ -6,7 +6,7 @@ $outputDir = Join-Path $desktopRoot "aksoy-tank-builds"
 $outputAabPath = Join-Path $outputDir "aksoy-tank-release.aab"
 $outputApkPath = Join-Path $outputDir "aksoy-tank-debug.apk"
 $releaseNotesSource = Join-Path $projectRoot "docs\play-store-guncelleme-notlari.md"
-$releaseNotesOutput = Join-Path $outputDir "guncelleme-notlari-1.4.0.txt"
+$releaseNotesOutput = Join-Path $outputDir "guncelleme-notlari-1.9.2.txt"
 
 function Get-GodotExecutable {
 	$candidates = @(
@@ -84,7 +84,7 @@ function Test-AndroidPackageMetadata {
 
 	$badging = (& $aaptExe dump badging $ApkPath) -join "`n"
 	if ($LASTEXITCODE -ne 0) { throw "APK manifest bilgisi okunamadi." }
-	if ($badging -notmatch "package: name='com\.atalay\.aksoytank' versionCode='14' versionName='1\.4\.0'") {
+	if ($badging -notmatch "package: name='com\.atalay\.aksoytank' versionCode='21' versionName='1\.9\.2'") {
 		throw "APK paket veya surum bilgisi beklenen degerde degil."
 	}
 	if ($badging -notmatch "sdkVersion:'24'") { throw "APK minimum SDK 24 degil." }
@@ -109,7 +109,7 @@ function Test-AabManifestMetadata {
 	if (-not (Test-Path $manifestPath)) { throw "AAB release manifesti bulunamadi." }
 	$manifest = Get-Content $manifestPath -Raw
 	if ($manifest -notmatch 'package="com\.atalay\.aksoytank"') { throw "AAB paket adi hatali." }
-	if ($manifest -notmatch 'android:versionCode="14"' -or $manifest -notmatch 'android:versionName="1\.4\.0"') {
+	if ($manifest -notmatch 'android:versionCode="21"' -or $manifest -notmatch 'android:versionName="1\.9\.2"') {
 		throw "AAB surum bilgisi hatali."
 	}
 	if ($manifest -notmatch 'android:minSdkVersion="24"' -or $manifest -notmatch 'android:targetSdkVersion="36"') {
@@ -130,6 +130,26 @@ try {
 	Invoke-Step "Oynanis regresyon testi" {
 		& $godotExe --headless --path $projectRoot --script res://tools/gameplay_regression_test.gd
 		if ($LASTEXITCODE -ne 0) { throw "Oynanis regresyon testi basarisiz." }
+	}
+
+	Invoke-Step "Profesyonel hitbox regresyon testi" {
+		& $godotExe --headless --path $projectRoot --script res://tools/hitbox_regression_test.gd
+		if ($LASTEXITCODE -ne 0) { throw "Hitbox regresyon testi basarisiz." }
+	}
+
+	Invoke-Step "Duvar ve kose carpisma testi" {
+		& $godotExe --headless --path $projectRoot --script res://tools/wall_collision_regression_test.gd
+		if ($LASTEXITCODE -ne 0) { throw "Duvar carpisma testi basarisiz." }
+	}
+
+	Invoke-Step "Tank temas ve ayrilma testi" {
+		& $godotExe --headless --path $projectRoot --script res://tools/tank_separation_regression_test.gd
+		if ($LASTEXITCODE -ne 0) { throw "Tank ayrilma testi basarisiz." }
+	}
+
+	Invoke-Step "Cevrim ici yumusatma testi" {
+		& $godotExe --headless --path $projectRoot --script res://tools/network_smoothing_test.gd
+		if ($LASTEXITCODE -ne 0) { throw "Cevrim ici yumusatma testi basarisiz." }
 	}
 
 	Invoke-Step "Mobil kontrol smoke testi" {

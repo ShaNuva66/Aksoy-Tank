@@ -274,8 +274,13 @@ static func _reserved_cells_for_stage(stage: Dictionary) -> Dictionary:
 
 	for cell in base_cells:
 		reserved[cell] = true
-	for cell in spawn_cells:
-		reserved[cell] = true
+	# Keep a 3x3 deployment bay open around row 2. Large bosses have up to a
+	# 42 px radius and would overlap the top border or adjacent wall cells when
+	# spawned in the original single 48 px cell.
+	for spawn_cell in spawn_cells:
+		for x_offset in range(-1, 2):
+			for spawn_y in range(1, 4):
+				reserved[Vector2i(spawn_cell.x + x_offset, spawn_y)] = true
 	for cell in [player_cell, player_cell + Vector2i(-2, 0), player_cell + Vector2i(2, 0)]:
 		reserved[cell] = true
 

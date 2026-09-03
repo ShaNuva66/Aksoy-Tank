@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://cleax731qry3p" path="res://src/scripts/main_menu.gd" id="1"]
 [ext_resource type="Script" path="res://src/scripts/black_cat_backdrop.gd" id="2"]
+[ext_resource type="Script" path="res://src/scripts/tank_preview.gd" id="3"]
 
 [node name="MainMenu" type="Control" unique_id=1248985639]
 layout_mode = 3
@@ -182,8 +183,70 @@ text = "ODA KODU"
 custom_minimum_size = Vector2(260, 0)
 layout_mode = 2
 placeholder_text = "ALFA1"
+max_length = 8
+
+[node name="ProfileCard" type="HBoxContainer" parent="CenterContainer/Panel/Margin/VBox/OnlineConfig"]
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="ProfileFields" type="VBoxContainer" parent="CenterContainer/Panel/Margin/VBox/OnlineConfig/ProfileCard"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="NameRow" type="HBoxContainer" parent="CenterContainer/Panel/Margin/VBox/OnlineConfig/ProfileCard/ProfileFields"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="NameLabel" type="Label" parent="CenterContainer/Panel/Margin/VBox/OnlineConfig/ProfileCard/ProfileFields/NameRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 17
+text = "OYUNCU ADI"
+
+[node name="PlayerNameEdit" type="LineEdit" parent="CenterContainer/Panel/Margin/VBox/OnlineConfig/ProfileCard/ProfileFields/NameRow"]
+custom_minimum_size = Vector2(260, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Ali Atalay"
+max_length = 18
+
+[node name="StyleRow" type="HBoxContainer" parent="CenterContainer/Panel/Margin/VBox/OnlineConfig/ProfileCard/ProfileFields"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="StyleCaption" type="Label" parent="CenterContainer/Panel/Margin/VBox/OnlineConfig/ProfileCard/ProfileFields/StyleRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 17
+text = "TANK STİLİ"
+
+[node name="PrevStyleButton" type="Button" parent="CenterContainer/Panel/Margin/VBox/OnlineConfig/ProfileCard/ProfileFields/StyleRow"]
+custom_minimum_size = Vector2(42, 36)
+layout_mode = 2
+text = "<"
+
+[node name="StyleLabel" type="Label" parent="CenterContainer/Panel/Margin/VBox/OnlineConfig/ProfileCard/ProfileFields/StyleRow"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "AKINCI"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="NextStyleButton" type="Button" parent="CenterContainer/Panel/Margin/VBox/OnlineConfig/ProfileCard/ProfileFields/StyleRow"]
+custom_minimum_size = Vector2(42, 36)
+layout_mode = 2
+text = ">"
+
+[node name="TankPreview" type="Control" parent="CenterContainer/Panel/Margin/VBox/OnlineConfig/ProfileCard"]
+custom_minimum_size = Vector2(145, 100)
+layout_mode = 2
+script = ExtResource("3")
 
 [node name="ServerRow" type="HBoxContainer" parent="CenterContainer/Panel/Margin/VBox/OnlineConfig" unique_id=233740517]
+visible = false
 layout_mode = 2
 theme_override_constants/separation = 12
 
@@ -196,12 +259,12 @@ text = "SERVER URL"
 [node name="ServerUrlEdit" type="LineEdit" parent="CenterContainer/Panel/Margin/VBox/OnlineConfig/ServerRow" unique_id=543392611]
 custom_minimum_size = Vector2(360, 0)
 layout_mode = 2
-placeholder_text = "ws://127.0.0.1:8765/ws"
+placeholder_text = "wss://atify.com.tr/aksoy-tank/ws"
 
 [node name="OnlineStatusLabel" type="Label" parent="CenterContainer/Panel/Margin/VBox/OnlineConfig" unique_id=204026108]
 layout_mode = 2
 theme_override_font_sizes/font_size = 15
-text = "Online oda icin server ve oda kodu gir."
+text = "Oda kodunu rakibinle paylas. Ilk giren oyuncu odayi kurar."
 horizontal_alignment = 1
 
 [node name="StartButton" type="Button" parent="CenterContainer/Panel/Margin/VBox" unique_id=905382234]

@@ -64,6 +64,7 @@ func _audit_catalog() -> void:
 
 		_audit_objective(stage, queue, label)
 		_audit_cells(brick_cells, steel_cells, label, bool(stage.get("core_enabled", true)))
+		_audit_spawn_bays(brick_cells, steel_cells, label)
 		_audit_boss_pressure(stage, queue, profiles, label)
 
 
@@ -109,6 +110,14 @@ func _audit_cell(cell: Vector2i, label: String, block_type: String, core_enabled
 
 	if core_enabled and BASE_RESERVED_CELLS.has(cell):
 		_warn("%s %s uses base reserved cell, arena will override it: %s" % [label, block_type, cell])
+
+
+func _audit_spawn_bays(brick_cells: Array, steel_cells: Array, label: String) -> void:
+	for spawn_cell in SPAWN_POINTS:
+		for x_offset in range(-1, 2):
+			for spawn_y in range(1, 4):
+				var bay_cell := Vector2i(spawn_cell.x + x_offset, spawn_y)
+				_require(not brick_cells.has(bay_cell) and not steel_cells.has(bay_cell), "%s blocks large-tank spawn bay at %s" % [label, bay_cell])
 
 
 func _audit_boss_pressure(stage: Dictionary, queue: Array, profiles: Dictionary, label: String) -> void:
@@ -164,6 +173,12 @@ func _audit_scene_loads() -> void:
 			_fail("Stage %02d missing MobileControls" % [index + 1])
 		elif current_scene.get_node_or_null("Hud") == null:
 			_fail("Stage %02d missing Hud" % [index + 1])
+
+		await physics_frame
+		var large_tank_spawn: Vector2 = arena._choose_enemy_spawn_position(42.0)
+		_require(large_tank_spawn.x >= 0.0, "Stage %02d has no collision-safe large boss spawn" % [index + 1])
+		if large_tank_spawn.x >= 0.0:
+			_require(arena._is_enemy_spawn_position_clear(large_tank_spawn, 42.0), "Stage %02d large boss spawn overlaps a wall or tank" % [index + 1])
 
 		arena.queue_free()
 		current_scene = null

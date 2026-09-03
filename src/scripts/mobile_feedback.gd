@@ -9,6 +9,10 @@ static func fire() -> void:
 	_vibrate(24)
 
 
+static func confirmed_hit() -> void:
+	_vibrate(30)
+
+
 static func reward() -> void:
 	_vibrate(36)
 
