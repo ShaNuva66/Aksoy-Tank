@@ -36,6 +36,7 @@ if ($preset -notmatch 'ITSAppUsesNonExemptEncryption') { Add-Failure 'Sifreleme 
 if ($preset -notmatch '(?m)^privacy/tracking_enabled=false$') { Add-Failure 'Takip kapali olarak beyan edilmemis.' }
 if ($project -notmatch '(?m)^config/features=PackedStringArray\("4\.6"\)$') { Add-Failure 'Proje Godot 4.6 olarak ayarli degil.' }
 if ($project -notmatch '(?m)^window/handheld/orientation=0$') { Add-Failure 'Oyun yatay ekran yonune sabitlenmemis.' }
+if ($project -notmatch '(?m)^textures/vram_compression/import_etc2_astc=true$') { Add-Failure 'iOS icin ETC2/ASTC doku aktarimi etkin degil.' }
 
 if (-not $SkipAccountChecks) {
 	if ($preset -cmatch '(?m)^application/app_store_team_id="([A-Z0-9]{10})"$') {
