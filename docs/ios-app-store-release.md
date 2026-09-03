@@ -4,7 +4,7 @@
 > Kurulum ve calistirma adimlari `docs/app-store-ios.md` dosyasindadir.
 
 Bu kopya Godot 4.6.2, iPhone, yatay ekran ve App Store dagitimi icin hazirlandi.
-Bundle ID `com.atalay.aksoytank`, ilk App Store pazarlama surumu `1.0` ve
+Bundle ID `com.atalay.aksoytanks`, ilk App Store pazarlama surumu `1.0` ve
 minimum sistem iOS 15.0 olarak ayarlidir. Build numarasi GitHub Actions
 tarafindan her calistirmada otomatik artirilir.
 
@@ -35,7 +35,7 @@ Windows PowerShell'de bu klasorde:
 
 App Store Connect'te farkli bir Bundle ID kaydettiysen ayni komuta
 `-BundleId yeni.bundle.id` ekle. Ancak yeni uygulama kaydi icin hazir ve onerilen
-kimlik `com.atalay.aksoytank`tir.
+kimlik `com.atalay.aksoytanks`tir.
 
 Her yeni yukleme denemesinde build numarasini artir:
 
@@ -50,7 +50,7 @@ App Store Connect > Apps > `+` > New App:
 - Platforms: iOS
 - Name: Aksoy Tank
 - Primary Language: Turkish
-- Bundle ID: `com.atalay.aksoytank`
+- Bundle ID: `com.atalay.aksoytanks`
 - SKU: `aksoy-tank-ios-2026`
 - User Access: Full Access
 
@@ -98,7 +98,7 @@ Komut iOS 26 SDK'yi kontrol eder, kaynaklari import eder ve
 1. Uretilen `AksoyTank.xcodeproj` dosyasini Xcode ile ac.
 2. Target > Signing & Capabilities bolumunde `Automatically manage signing`
    acik olsun ve satin aldigin Apple Developer takimini sec.
-3. Bundle Identifier degerinin `com.atalay.aksoytank` oldugunu kontrol et.
+3. Bundle Identifier degerinin `com.atalay.aksoytanks` oldugunu kontrol et.
 4. Destination olarak `Any iOS Device (arm64)` sec.
 5. Product > Archive komutunu calistir.
 6. Organizer'da Validate App ile kontrol et.

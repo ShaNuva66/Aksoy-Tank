@@ -3,7 +3,7 @@
 ## Uygulama kaydi
 
 - Ad: `Aksoy Tank`
-- Bundle ID: `com.atalay.aksoytank`
+- Bundle ID: `com.atalay.aksoytanks`
 - SKU: `aksoy-tank-ios-2026`
 - Birincil dil: Turkce
 - Ana kategori: Oyunlar > Aksiyon

@@ -14,7 +14,7 @@ Apple anahtarlari repoya veya build dosyasina yazilmaz.
    - Yalnizca bir kez indirilebilen `AuthKey_....p8` dosyasi
 4. Apple Developer hesabindaki Membership Details sayfasindan 10 karakterli Team ID'yi al.
 5. App Store Connect'teki Aksoy Tank kaydinin Bundle ID degerinin
-   `com.atalay.aksoytank` oldugunu dogrula.
+   `com.atalay.aksoytanks` oldugunu dogrula.
 
 ## GitHub secrets
 
@@ -39,4 +39,4 @@ Anahtari sohbet mesajina, issue'ya veya kaynak koduna yapistirma.
    alanindan build'i sec.
 
 Her calistirmada GitHub run numarasi kullanildigi icin Apple'a benzersiz bir build
-numarasi gider. App Store surumu `1.0`, Bundle ID `com.atalay.aksoytank` olarak ayarlidir.
+numarasi gider. App Store surumu `1.0`, Bundle ID `com.atalay.aksoytanks` olarak ayarlidir.

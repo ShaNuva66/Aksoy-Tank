@@ -101,7 +101,7 @@ python .\online-relay\server.py
 
 ### iOS / App Store
 
-- Bundle ID: `com.atalay.aksoytank`
+- Bundle ID: `com.atalay.aksoytanks`
 - Surum: `1.5.0` (build `15`)
 - Minimum sistem: iOS 15.0
 - Hedef cihaz: iPhone, yatay ekran, arm64

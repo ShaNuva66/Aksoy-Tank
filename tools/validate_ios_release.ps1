@@ -26,7 +26,7 @@ $project = [System.IO.File]::ReadAllText($projectPath)
 
 if ($preset -notmatch '(?m)^name="iOS"$') { Add-Failure 'iOS export preset bulunamadi.' }
 if ($preset -notmatch '(?m)^platform="iOS"$') { Add-Failure 'iOS export platformu ayarli degil.' }
-if ($preset -notmatch '(?m)^application/bundle_identifier="com\.atalay\.aksoytank"$') { Add-Failure 'Bundle ID com.atalay.aksoytank degil.' }
+if ($preset -notmatch '(?m)^application/bundle_identifier="com\.atalay\.aksoytanks"$') { Add-Failure 'Bundle ID com.atalay.aksoytanks degil.' }
 if ($preset -notmatch '(?m)^application/short_version="1\.0"$') { Add-Failure 'App Store iOS kisa surumu 1.0 degil.' }
 if ($preset -notmatch '(?m)^application/version="(?:__BUILD_NUMBER__|[1-9][0-9]*)"$') { Add-Failure 'iOS build numarasi gecersiz.' }
 if ($preset -notmatch '(?m)^application/min_ios_version="15\.0"$') { Add-Failure 'Minimum iOS surumu 15.0 degil.' }

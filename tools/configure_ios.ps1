@@ -5,7 +5,7 @@ param(
 	[string]$TeamId,
 
 	[ValidatePattern('(?-i)^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$')]
-	[string]$BundleId = 'com.atalay.aksoytank',
+	[string]$BundleId = 'com.atalay.aksoytanks',
 
 	[ValidatePattern('^[0-9]+(?:\.[0-9]+){1,2}$')]
 	[string]$ShortVersion = '1.9.2',
