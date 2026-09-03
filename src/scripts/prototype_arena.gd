@@ -10,6 +10,7 @@ const WALL_BLOCK_SCENE := preload("res://src/scenes/wall_block.tscn")
 const BlackCatTheme := preload("res://src/scripts/black_cat_theme.gd")
 const HeartHud := preload("res://src/scripts/heart_hud.gd")
 const DamageVignette := preload("res://src/scripts/damage_vignette.gd")
+const HitConfirmation := preload("res://src/scripts/hit_confirmation.gd")
 const OnboardingGuide := preload("res://src/scripts/onboarding_guide.gd")
 const MobileFeedback := preload("res://src/scripts/mobile_feedback.gd")
 const CELL_SIZE := 48.0
@@ -20,9 +21,20 @@ const BASE_RESERVED_CELLS := [
 	Vector2i(11, 11), Vector2i(12, 11), Vector2i(13, 11),
 	Vector2i(11, 12), Vector2i(12, 12), Vector2i(13, 12)
 ]
-const SNAPSHOT_INTERVAL := 0.12
-const INPUT_SEND_INTERVAL := 0.05
+const SNAPSHOT_INTERVAL := 0.05
+const INPUT_SEND_INTERVAL := 0.033
 const WAVE_BREAK_DELAY := 2.2
+const VS_CACHE_CELLS := [Vector2i(2, 3), Vector2i(23, 11)]
+const VS_CACHE_FIRST_DELAY := 9.0
+const VS_CACHE_REPEAT_DELAY := 27.0
+const VS_CACHE_LIFETIME := 8.0
+const VS_CACHE_MAX_WAVES := 2
+const VS_CENTER_POSITION := Vector2(640.0, 360.0)
+const VS_CENTER_RESERVED_CELLS := [Vector2i(12, 7), Vector2i(13, 7)]
+const VS_CENTER_FIRST_DELAY := 5.0
+const VS_CENTER_REPEAT_DELAY := 24.0
+const VS_CENTER_LIFETIME := 7.0
+const VS_CENTER_MAX_WAVES := 2
 const PLAYER_PROFILES := {
 	1: {
 		"slot": 1,
@@ -56,6 +68,7 @@ class PauseInputProxy:
 @onready var player_template = $PlayerTank
 @onready var spawn_timer: Timer = $EnemySpawnTimer
 @onready var hud: CanvasLayer = $Hud
+@onready var header_backdrop: ColorRect = $Hud/HeaderBackdrop
 @onready var header: MarginContainer = $Hud/Header
 @onready var info_label: Label = $Hud/Header/VBox/InfoLabel
 @onready var brief_label: Label = $Hud/Header/VBox/BriefLabel
@@ -69,6 +82,8 @@ class PauseInputProxy:
 @onready var shield_hud: MarginContainer = $Hud/ShieldHud
 @onready var shield_label: Label = $Hud/ShieldHud/VBox/Label
 @onready var shield_bar: ProgressBar = $Hud/ShieldHud/VBox/Bar
+@onready var result_dim: ColorRect = $Hud/ResultOverlay/Dim
+@onready var result_fx: Control = $Hud/ResultOverlay/ResultFX
 @onready var result_panel: PanelContainer = $Hud/ResultOverlay/CenterContainer/Panel
 @onready var result_overlay: Control = $Hud/ResultOverlay
 @onready var result_title: Label = $Hud/ResultOverlay/CenterContainer/Panel/Margin/VBox/Title
@@ -106,6 +121,7 @@ var _capture_requested := false
 var _capture_output_path := ""
 var _capture_stage_index := -1
 var _capture_delay_frames := 150
+var _capture_size := Vector2i.ZERO
 var _theme_palette: Dictionary = {}
 var _combat_balance: Dictionary = {}
 var _alert_time := 0.0
@@ -118,6 +134,7 @@ var _paused := false
 var _heart_hud: Control = null
 var _damage_overlay: Control = null
 var _onboarding_guide: Control = null
+var _onboarding_active := false
 var _last_health_by_slot := {}
 var _objective_type := "eliminate"
 var _objective_target_type := ""
@@ -127,6 +144,25 @@ var _mission_label := ""
 var _wave_count := 1
 var _current_wave := 1
 var _current_wave_end := 0
+var _pending_network_snapshot: Dictionary = {}
+var _wall_revision := 0
+var _last_sent_wall_revision := -1
+var _last_applied_wall_revision := -1
+var _network_hud_timer := 0.0
+var _winner_slot := 0
+var _result_is_draw := false
+var _result_animation_played := false
+var _elimination_text := ""
+var _vs_cache_timer := VS_CACHE_FIRST_DELAY
+var _vs_cache_wave := 0
+var _vs_center_timer := VS_CENTER_FIRST_DELAY
+var _vs_center_wave := 0
+var _rematch_ready_slots: Dictionary = {}
+var _rematch_transition_started := false
+var _hit_event_sequence := 0
+var _last_hit_event: Dictionary = {}
+var _hit_event_lifetime := 0.0
+var _last_applied_hit_event_sequence := 0
 
 
 func _ready() -> void:
@@ -175,6 +211,10 @@ func _ready() -> void:
 	if _is_online_mode() and not _capture_requested:
 		NetSession.peer_status_changed.connect(_on_online_peer_status_changed)
 		NetSession.snapshot_updated.connect(_on_online_snapshot_updated)
+		NetSession.profiles_updated.connect(_on_online_profiles_updated)
+		NetSession.rematch_status_updated.connect(_on_online_rematch_status_updated)
+		NetSession.room_joined.connect(_on_online_room_joined)
+		NetSession.authority_changed.connect(_on_online_authority_changed)
 		if _is_authority():
 			if not _waiting_for_peer and not _is_vs_mode():
 				spawn_timer.start(_scaled_spawn_delay(1.0))
@@ -182,7 +222,7 @@ func _ready() -> void:
 			spawn_timer.stop()
 			_show_alert("Online oda baglandi. Host snapshot bekleniyor.", _get_theme_color("hud_accent", Color("#f2d48f")))
 	else:
-		if not _is_vs_mode():
+		if not _is_vs_mode() and not _onboarding_active:
 			spawn_timer.start(_scaled_spawn_delay(0.25 if _capture_requested else _get_initial_spawn_delay()))
 		if not _capture_requested:
 			_show_alert(_build_start_alert_text(), _get_theme_color("hud_accent", Color("#f2d48f")))
@@ -199,10 +239,25 @@ func _exit_tree() -> void:
 			NetSession.peer_status_changed.disconnect(_on_online_peer_status_changed)
 		if NetSession.snapshot_updated.is_connected(_on_online_snapshot_updated):
 			NetSession.snapshot_updated.disconnect(_on_online_snapshot_updated)
+		if NetSession.profiles_updated.is_connected(_on_online_profiles_updated):
+			NetSession.profiles_updated.disconnect(_on_online_profiles_updated)
+		if NetSession.rematch_status_updated.is_connected(_on_online_rematch_status_updated):
+			NetSession.rematch_status_updated.disconnect(_on_online_rematch_status_updated)
+		if NetSession.room_joined.is_connected(_on_online_room_joined):
+			NetSession.room_joined.disconnect(_on_online_room_joined)
+		if NetSession.authority_changed.is_connected(_on_online_authority_changed):
+			NetSession.authority_changed.disconnect(_on_online_authority_changed)
 
 
 func _process(delta: float) -> void:
 	_update_shield_hud(delta)
+	if _is_online_mode():
+		_network_hud_timer = maxf(_network_hud_timer - delta, 0.0)
+		if _network_hud_timer <= 0.0:
+			_network_hud_timer = 0.5
+			_update_network_info_label()
+			if _is_vs_mode():
+				stats_label.text = _build_stats_summary()
 	if _alert_time > 0.0:
 		_alert_time = max(_alert_time - delta, 0.0)
 		var alpha: float = 0.38 + 0.62 * minf(_alert_time / 2.4, 1.0)
@@ -214,6 +269,10 @@ func _process(delta: float) -> void:
 
 	power_label.text = "Destek: " + _build_power_summary()
 
+
+
+func _physics_process(delta: float) -> void:
+	_hit_event_lifetime = maxf(_hit_event_lifetime - delta, 0.0)
 	if _capture_requested or not _is_online_mode() or _match_over:
 		return
 
@@ -221,20 +280,25 @@ func _process(delta: float) -> void:
 		_apply_remote_player_input()
 		if _waiting_for_peer or not NetSession.is_peer_connected():
 			return
-
+		_tick_vs_center_cache(delta)
+		_tick_vs_corner_caches(delta)
 		_snapshot_send_timer = max(_snapshot_send_timer - delta, 0.0)
 		if _snapshot_send_timer <= 0.0:
 			_snapshot_send_timer = SNAPSHOT_INTERVAL
 			NetSession.send_snapshot(_build_world_snapshot())
-	else:
-		var local_player = _get_local_player()
-		if local_player == null:
-			return
+		return
 
-		_input_send_timer = max(_input_send_timer - delta, 0.0)
-		if _input_send_timer <= 0.0:
-			_input_send_timer = INPUT_SEND_INTERVAL
-			NetSession.send_input(local_player.capture_local_input_state())
+	if not _pending_network_snapshot.is_empty():
+		_apply_world_snapshot(_pending_network_snapshot)
+		_pending_network_snapshot.clear()
+
+	var local_player = _get_local_player()
+	if local_player == null:
+		return
+	_input_send_timer = max(_input_send_timer - delta, 0.0)
+	if _input_send_timer <= 0.0:
+		_input_send_timer = INPUT_SEND_INTERVAL
+		NetSession.send_input(local_player.capture_local_input_state())
 
 
 func _input(event: InputEvent) -> void:
@@ -246,7 +310,7 @@ func _input(event: InputEvent) -> void:
 				_go_to_next_stage()
 				return
 			if retry_button.get_global_rect().has_point(touch_position):
-				_restart_level()
+				_on_retry_requested()
 				return
 			if menu_button.get_global_rect().has_point(touch_position):
 				_go_to_main_menu()
@@ -268,7 +332,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 		if _match_over:
 			if event.keycode == KEY_R:
-				_restart_level()
+				_on_retry_requested()
 				return
 			if event.keycode == KEY_N and next_stage_button.visible:
 				_go_to_next_stage()
@@ -295,6 +359,21 @@ func _draw() -> void:
 	for y in range(GRID_SIZE.y + 1):
 		var py := GRID_OFFSET.y + float(y) * CELL_SIZE
 		draw_line(Vector2(GRID_OFFSET.x, py), Vector2(GRID_OFFSET.x + CELL_SIZE * GRID_SIZE.x, py), grid_color, 1.0)
+
+	if _is_vs_mode():
+		var center_fill := Color("#b98cff1f")
+		var center_ring := Color("#d7b4ffaa")
+		draw_circle(VS_CENTER_POSITION, 36.0, center_fill, true, -1.0, true)
+		draw_arc(VS_CENTER_POSITION, 37.0, 0.0, TAU, 40, center_ring, 2.5, true)
+		draw_line(VS_CENTER_POSITION + Vector2(-17.0, 0.0), VS_CENTER_POSITION + Vector2(17.0, 0.0), center_ring, 1.5, true)
+		draw_line(VS_CENTER_POSITION + Vector2(0.0, -17.0), VS_CENTER_POSITION + Vector2(0.0, 17.0), center_ring, 1.5, true)
+		for cache_cell in VS_CACHE_CELLS:
+			var cache_position := _cell_to_world(cache_cell)
+			var cache_fill := Color("#f3c86818")
+			var cache_ring := Color("#f3c86888")
+			draw_circle(cache_position, 30.0, cache_fill, true, -1.0, true)
+			draw_arc(cache_position, 31.0, 0.0, TAU, 36, cache_ring, 2.0, true)
+			draw_arc(cache_position, 23.0, -PI * 0.75, PI * 0.25, 24, cache_ring.lightened(0.18), 1.5, true)
 
 
 func get_active_player_targets() -> Array:
@@ -325,7 +404,7 @@ func _configure_players() -> void:
 
 	for slot in range(1, _player_count + 1):
 		var player_node = player_template if slot == 1 else PLAYER_TANK_SCENE.instantiate()
-		var player_profile := Dictionary(PLAYER_PROFILES[slot].duplicate(true))
+		var player_profile := _build_player_profile(slot)
 		player_profile["team"] = "player_%d" % slot if _is_vs_mode() else "player"
 		player_profile["max_health_bonus"] = int(_combat_balance.get("player_bonus_health", 0))
 		player_profile["spawn_shield_duration"] = float(_combat_balance.get("spawn_shield_duration", 0.0))
@@ -336,6 +415,7 @@ func _configure_players() -> void:
 
 		player_node.position = _cell_to_world(_player_spawn_cells[slot - 1])
 		player_node.rotation = 0.0
+		player_node.reset_physics_interpolation()
 		player_node.configure_player(player_profile)
 		player_node.set_mobile_controls(mobile_controls)
 		player_node.destroyed.connect(_on_player_destroyed.bind(slot))
@@ -358,6 +438,22 @@ func _configure_players() -> void:
 		_players_by_slot[slot] = player_node
 
 
+func _build_player_profile(slot: int) -> Dictionary:
+	var profile := Dictionary(PLAYER_PROFILES[slot].duplicate(true))
+	if _is_online_mode() and not _capture_requested:
+		profile.merge(NetSession.get_player_profile(slot), true)
+	return profile
+
+
+func _apply_online_player_profiles() -> void:
+	if not _is_online_mode():
+		return
+	for slot in range(1, _player_count + 1):
+		var player_node = _get_player_by_slot(slot)
+		if is_instance_valid(player_node) and player_node.has_method("apply_cosmetic_profile"):
+			player_node.apply_cosmetic_profile(NetSession.get_player_profile(slot))
+
+
 func _configure_camera() -> void:
 	camera.position = Vector2(640.0, 360.0)
 
@@ -375,7 +471,7 @@ func _configure_mobile_controls() -> void:
 func _connect_scene_signals() -> void:
 	spawn_timer.timeout.connect(_on_spawn_timer_timeout)
 	next_stage_button.pressed.connect(_go_to_next_stage)
-	retry_button.pressed.connect(_restart_level)
+	retry_button.pressed.connect(_on_retry_requested)
 	menu_button.pressed.connect(_go_to_main_menu)
 	pause_button.pressed.connect(_on_pause_button_pressed)
 	pause_resume_button.pressed.connect(_on_pause_resume_button_pressed)
@@ -393,18 +489,15 @@ func _install_pause_input_proxy() -> void:
 
 
 func _install_game_feel_ui() -> void:
-	header.offset_left = 72.0
-	header.offset_top = 54.0
-	header.offset_right = 720.0
-	header.offset_bottom = 174.0
-	pause_button.offset_left = -238.0
-	pause_button.offset_top = 54.0
-	pause_button.offset_right = -72.0
-	pause_button.offset_bottom = 106.0
-	shield_hud.offset_left = -372.0
-	shield_hud.offset_top = 116.0
-	shield_hud.offset_right = -72.0
-	shield_hud.offset_bottom = 170.0
+	header_backdrop.visible = false
+	header.visible = true
+	shield_backdrop.visible = false
+	shield_hud.visible = false
+	info_label.visible = false
+	brief_label.visible = false
+	status_label.visible = false
+	stats_label.visible = false
+	power_label.visible = false
 
 	_heart_hud = HeartHud.new()
 	_heart_hud.name = "HeartHud"
@@ -419,22 +512,26 @@ func _install_game_feel_ui() -> void:
 	_damage_overlay.anchor_bottom = 1.0
 	_damage_overlay.z_index = 18
 	hud.add_child(_damage_overlay)
+	_damage_overlay.configure(GameSession.get_effects_intensity(), GameSession.is_reduced_motion_enabled())
 
 
 func _start_onboarding_if_needed() -> void:
-	if _capture_requested or _stage_data.get("index", 0) != 0 or _is_online_mode():
+	if _capture_requested or _stage_data.get("index", 0) != 0 or _is_online_mode() or GameSession.has_completed_onboarding():
 		return
 
+	_onboarding_active = true
 	call_deferred("_spawn_onboarding_guide")
 
 
 func _spawn_onboarding_guide() -> void:
 	if not is_instance_valid(mobile_controls) or not is_instance_valid(_get_local_player()):
+		_on_onboarding_finished()
 		return
 
 	var joystick = mobile_controls.get_node_or_null("Root/PlayerOneControls/JoystickShell/JoystickArea")
 	var fire_button = mobile_controls.get_node_or_null("Root/PlayerOneControls/FireButton")
 	if joystick == null or fire_button == null:
+		_on_onboarding_finished()
 		return
 
 	_onboarding_guide = OnboardingGuide.new()
@@ -443,7 +540,16 @@ func _spawn_onboarding_guide() -> void:
 	_onboarding_guide.anchor_bottom = 1.0
 	_onboarding_guide.z_index = 19
 	hud.add_child(_onboarding_guide)
-	_onboarding_guide.configure(joystick.get_global_rect(), fire_button.get_global_rect(), _get_local_player().global_position)
+	_onboarding_guide.finished.connect(_on_onboarding_finished)
+	_onboarding_guide.configure(joystick.get_global_rect(), fire_button.get_global_rect(), _get_local_player())
+
+
+func _on_onboarding_finished() -> void:
+	GameSession.complete_onboarding()
+	_onboarding_active = false
+	if not _match_over and not _is_online_mode() and spawn_timer.is_stopped():
+		_show_alert("EGITIM TAMAMLANDI", _get_theme_color("hud_accent", Color("#f2d48f")))
+		spawn_timer.start(_scaled_spawn_delay(_get_initial_spawn_delay()))
 
 
 func _connect_button_feedback() -> void:
@@ -463,6 +569,14 @@ func _animate_hud_button(button: Control, pressed: bool) -> void:
 	var tween := create_tween()
 	tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tween.tween_property(button, "scale", Vector2(0.965, 0.965) if pressed else Vector2.ONE, 0.08).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	if pressed:
+		_play_sfx("ui", 1.0, 0.72)
+
+
+func _play_sfx(sound_name: String, pitch_scale: float = 1.0, gain: float = 1.0) -> void:
+	var audio_manager := get_node_or_null("/root/AudioManager")
+	if audio_manager:
+		audio_manager.play_sfx(sound_name, pitch_scale, gain)
 
 
 func _handle_pause_overlay_input(event: InputEvent) -> bool:
@@ -540,6 +654,7 @@ func _spawn_wall(cell: Vector2i, block_type: String, durability: int) -> void:
 	if wall.has_method("apply_theme"):
 		wall.apply_theme(_theme_palette)
 	wall.destroyed.connect(_on_wall_destroyed)
+	wall.state_changed.connect(_on_wall_state_changed)
 	add_child(wall)
 
 
@@ -552,13 +667,14 @@ func _on_spawn_timer_timeout() -> void:
 		return
 
 	var enemy_type := String(_enemy_queue[_spawned_enemies])
-	var spawn_cell := _choose_enemy_spawn_cell()
-	if spawn_cell.x < 0:
+	var enemy = ENEMY_TANK_SCENE.instantiate()
+	enemy.configure(enemy_type)
+	var spawn_position := _choose_enemy_spawn_position(float(enemy.get_tank_collision_radius()))
+	if spawn_position.x < 0.0:
+		enemy.free()
 		spawn_timer.start(_scaled_spawn_delay(0.3))
 		return
-	var enemy = ENEMY_TANK_SCENE.instantiate()
-	enemy.position = _cell_to_world(spawn_cell)
-	enemy.configure(enemy_type)
+	enemy.position = spawn_position
 	enemy.network_id = _claim_network_id()
 	enemy.destroyed.connect(_on_enemy_destroyed)
 	add_child(enemy)
@@ -605,34 +721,53 @@ func _complete_current_wave() -> void:
 	_current_wave_end = _wave_end_for(_current_wave)
 	_status_text = "Yeni dalga hazirlaniyor"
 	_show_alert("%d. DALGA ATLATILDI" % cleared_wave, Color("#9de6c2"))
+	_play_sfx("wave", 1.0, 0.78)
 	_update_hud()
 	spawn_timer.start(_scaled_spawn_delay(WAVE_BREAK_DELAY))
 
 
-func _choose_enemy_spawn_cell() -> Vector2i:
-	var best_cell := Vector2i(-1, -1)
+func _choose_enemy_spawn_position(enemy_radius: float) -> Vector2:
+	var best_position := Vector2(-1.0, -1.0)
 	var best_score := -INF
-	for cell in SPAWN_POINTS:
-		var world_position := _cell_to_world(cell)
-		var clear := true
-		for tank in get_tree().get_nodes_in_group("tanks"):
-			if not is_instance_valid(tank):
-				continue
-			var tank_radius := float(tank.get_tank_collision_radius()) if tank.has_method("get_tank_collision_radius") else 20.0
-			if world_position.distance_to(tank.global_position) < tank_radius + 58.0:
-				clear = false
-				break
-		if not clear:
-			continue
+	var row_offsets := [1, 2, 3] if enemy_radius > 23.0 else [0, 1, 2]
+	for base_cell in SPAWN_POINTS:
+		for row_offset in row_offsets:
+			for column_offset in [0, -1, 1]:
+				var cell: Vector2i = Vector2i(base_cell) + Vector2i(int(column_offset), row_offset)
+				if cell.x <= 0 or cell.x >= GRID_SIZE.x - 1 or cell.y <= 0 or cell.y >= GRID_SIZE.y - 1:
+					continue
+				var world_position := _cell_to_world(cell)
+				if not _is_enemy_spawn_position_clear(world_position, enemy_radius):
+					continue
+				var nearest_player_distance := 100000.0
+				for player_node in get_active_player_targets():
+					nearest_player_distance = minf(nearest_player_distance, world_position.distance_to(player_node.global_position))
+				var depth_penalty := float(row_offset) * 18.0
+				var score := nearest_player_distance - depth_penalty + _rng.randf_range(0.0, 90.0)
+				if score > best_score:
+					best_score = score
+					best_position = world_position
+	return best_position
 
-		var nearest_player_distance := 100000.0
-		for player_node in get_active_player_targets():
-			nearest_player_distance = minf(nearest_player_distance, world_position.distance_to(player_node.global_position))
-		var score := nearest_player_distance + _rng.randf_range(0.0, 90.0)
-		if score > best_score:
-			best_score = score
-			best_cell = cell
-	return best_cell
+
+func _is_enemy_spawn_position_clear(world_position: Vector2, enemy_radius: float) -> bool:
+	var shape := CircleShape2D.new()
+	shape.radius = enemy_radius + 0.5
+	var query := PhysicsShapeQueryParameters2D.new()
+	query.shape = shape
+	query.transform = Transform2D(0.0, world_position)
+	query.collision_mask = 2
+	query.collide_with_bodies = true
+	query.collide_with_areas = false
+	if not get_world_2d().direct_space_state.intersect_shape(query, 1).is_empty():
+		return false
+	for tank in get_tree().get_nodes_in_group("tanks"):
+		if not is_instance_valid(tank):
+			continue
+		var tank_radius := float(tank.get_tank_collision_radius()) if tank.has_method("get_tank_collision_radius") else 20.0
+		if world_position.distance_to(tank.global_position) < enemy_radius + tank_radius + 12.0:
+			return false
+	return true
 
 
 func _on_enemy_destroyed(enemy_type: String, at_position: Vector2) -> void:
@@ -641,6 +776,7 @@ func _on_enemy_destroyed(enemy_type: String, at_position: Vector2) -> void:
 
 	_alive_enemies = max(_alive_enemies - 1, 0)
 	_destroyed_enemies += 1
+	_play_sfx("explosion", 0.9 if _is_boss_enemy_type(enemy_type) else 1.08, 0.82 if _is_boss_enemy_type(enemy_type) else 0.55)
 	var objective_cleared := false
 	if _is_objective_target(enemy_type) and _objective_target_remaining > 0:
 		_objective_target_remaining = max(_objective_target_remaining - 1, 0)
@@ -660,16 +796,25 @@ func _on_enemy_destroyed(enemy_type: String, at_position: Vector2) -> void:
 
 
 func _on_player_destroyed(slot: int) -> void:
+	var defeated_player = _get_player_by_slot(slot)
+	var defeated_name: String = String(defeated_player.get_callsign()) if is_instance_valid(defeated_player) else _player_name_for_slot(slot)
 	_players_by_slot.erase(slot)
 	_update_hud()
 
 	var remaining_players := get_active_player_targets()
 	if _is_vs_mode():
 		if remaining_players.is_empty():
-			_finish_match(false, "Berabere", "Iki tank da ayni anda savas disi kaldi.")
+			_winner_slot = 0
+			_result_is_draw = true
+			_elimination_text = "İki tank da aynı anda hurdaya döndü. Arena yeni raundu bekliyor!"
+			_finish_match(false, "Berabere", _elimination_text)
 		else:
 			var winner = remaining_players[0]
-			_finish_match(true, "%s Kazandi" % winner.get_callsign(), "Rakip tank etkisiz hale getirildi.")
+			_winner_slot = int(winner.player_slot)
+			_result_is_draw = false
+			var winner_name := String(winner.get_callsign())
+			_elimination_text = "%s, %s tankı tarafından ezildi!" % [defeated_name, _possessive_name(winner_name)]
+			_finish_match(_winner_slot == _local_player_slot, "%s Arenayı Ezdi!" % winner_name, _elimination_text)
 		return
 
 	if remaining_players.is_empty():
@@ -684,11 +829,12 @@ func _on_player_health_changed(current_health: int, max_health: int, slot: int) 
 	_last_health_by_slot[slot] = current_health
 
 	if current_health < previous_health:
-		MobileFeedback.damage()
-		if _heart_hud and _heart_hud.has_method("pulse_damage") and slot == _local_player_slot:
-			_heart_hud.pulse_damage()
-		if _damage_overlay and _damage_overlay.has_method("flash") and slot == _local_player_slot:
-			_damage_overlay.flash()
+		if slot == _local_player_slot:
+			MobileFeedback.damage()
+			if _heart_hud and _heart_hud.has_method("pulse_damage"):
+				_heart_hud.pulse_damage()
+			if _damage_overlay and _damage_overlay.has_method("flash"):
+				_damage_overlay.flash()
 
 	_update_hud()
 
@@ -699,6 +845,11 @@ func _on_wall_destroyed(block_type: String) -> void:
 
 	if block_type == "base":
 		_finish_match(false, "Cekirdek Kaybedildi", "Dusmanlar enerji cekirdegi savunmasini kirdi.")
+
+
+func _on_wall_state_changed() -> void:
+	if _is_authority():
+		_wall_revision += 1
 
 
 func _finish_match(player_won: bool, title: String, subtitle: String) -> void:
@@ -715,34 +866,153 @@ func _finish_match(player_won: bool, title: String, subtitle: String) -> void:
 	elif player_won and _is_authority() and not _is_vs_mode():
 		unlocked_new_stage = GameSession.mark_stage_completed(_stage_data.get("index", 0))
 
-	_status_text = "Zafer" if player_won else "Kayip"
 	spawn_timer.stop()
 	result_title.text = title.to_upper()
 	result_subtitle.text = _build_result_subtitle(player_won, subtitle, unlocked_new_stage)
+	var local_won := player_won
+	if _is_vs_mode():
+		local_won = _configure_local_vs_result()
+	else:
+		_status_text = "Zafer" if player_won else "Kayip"
 	status_label.text = "Durum: " + _status_text
 	result_overlay.visible = true
-	next_stage_button.visible = player_won and not _is_vs_mode() and GameSession.has_next_stage()
+	next_stage_button.visible = local_won and not _is_vs_mode() and GameSession.has_next_stage()
 	_refresh_pause_button_visibility()
+	_stop_match_entities()
+	_play_result_presentation(local_won, _result_is_draw)
+	_play_sfx("victory" if local_won else "defeat", 1.0, 0.9)
+	# The regular network tick stops when the match ends, so deliver the final
+	# winner/result frame immediately to ensure the guest sees the animation.
+	if _is_online_mode() and _is_authority() and NetSession.is_peer_connected():
+		NetSession.send_snapshot(_build_world_snapshot())
 
+
+func _configure_local_vs_result() -> bool:
+	if _result_is_draw or _winner_slot <= 0:
+		_status_text = "Berabere"
+		result_title.text = "BERABERE"
+		result_subtitle.text = _elimination_text if not _elimination_text.is_empty() else "İkiz patlama! Yeni raundda son darbeyi sen vur."
+		retry_button.text = "YENI RAUND"
+		return false
+
+	var local_won := _winner_slot == _local_player_slot
+	if local_won:
+		_status_text = "Zafer"
+		result_title.text = "%s ZAFERDE!" % _player_name_for_slot(_winner_slot).to_upper()
+		result_subtitle.text = _elimination_text
+		retry_button.text = "BIR DAHA KAZAN"
+	else:
+		_status_text = "Kayip"
+		result_title.text = "%s ARENAYI ALDI" % _player_name_for_slot(_winner_slot).to_upper()
+		result_subtitle.text = _elimination_text
+		retry_button.text = "ROVANS AL"
+	return local_won
+
+
+func _player_name_for_slot(slot: int) -> String:
+	var player_node = _get_player_by_slot(slot)
+	if is_instance_valid(player_node):
+		return String(player_node.get_callsign())
+	if _is_online_mode():
+		return String(NetSession.get_player_profile(slot).get("name", "Oyuncu"))
+	return "P%d" % slot
+
+
+func _possessive_name(player_name: String) -> String:
+	var lower := player_name.to_lower()
+	var harmony := "in"
+	for index in range(lower.length() - 1, -1, -1):
+		var character := lower.substr(index, 1)
+		if character in ["a", "ı"]:
+			harmony = "ın"
+			break
+		if character in ["e", "i"]:
+			harmony = "in"
+			break
+		if character in ["o", "u"]:
+			harmony = "un"
+			break
+		if character in ["ö", "ü"]:
+			harmony = "ün"
+			break
+	var last_character := lower.right(1)
+	var buffer := "n" if last_character in ["a", "e", "ı", "i", "o", "ö", "u", "ü"] else ""
+	return "%s'%s%s" % [player_name, buffer, harmony]
+
+
+func _play_result_presentation(local_won: bool, draw_result: bool) -> void:
+	if _result_animation_played:
+		return
+	_result_animation_played = true
+	result_overlay.visible = true
+	result_overlay.modulate = Color(1.0, 1.0, 1.0, 0.0)
+	result_panel.pivot_offset = result_panel.size * 0.5
+	result_title.pivot_offset = result_title.size * 0.5
+	result_panel.scale = Vector2(0.58, 0.58) if local_won else Vector2(0.88, 0.88)
+	result_title.scale = Vector2(0.72, 0.72)
+	retry_button.disabled = true
+	menu_button.disabled = true
+	next_stage_button.disabled = true
+
+	var accent := BlackCatTheme.ACCENT if local_won else (Color("#aeb9c9") if draw_result else BlackCatTheme.DANGER)
+	result_dim.color = Color(0.03, 0.02, 0.01, 0.78) if local_won else Color(0.09, 0.015, 0.025, 0.82)
+	result_title.add_theme_color_override("font_color", accent.lightened(0.18))
+	result_panel.add_theme_stylebox_override("panel", BlackCatTheme.make_panel_style(BlackCatTheme.SURFACE_ALT, accent, 30, 3))
+	if result_fx and result_fx.has_method("play_result"):
+		result_fx.play_result(local_won, draw_result, GameSession.get_effects_intensity(), GameSession.is_reduced_motion_enabled())
+	if GameSession.is_reduced_motion_enabled():
+		result_overlay.modulate = Color.WHITE
+		result_panel.scale = Vector2.ONE
+		result_title.scale = Vector2.ONE
+		retry_button.disabled = false
+		menu_button.disabled = false
+		next_stage_button.disabled = false
+		return
+
+	var entrance := create_tween().set_parallel(true)
+	entrance.set_trans(Tween.TRANS_BACK if local_won else Tween.TRANS_QUAD)
+	entrance.set_ease(Tween.EASE_OUT)
+	entrance.tween_property(result_overlay, "modulate:a", 1.0, 0.32)
+	entrance.tween_property(result_panel, "scale", Vector2.ONE, 0.62 if local_won else 0.42)
+	entrance.tween_property(result_title, "scale", Vector2.ONE, 0.5)
+
+	var title_pulse := create_tween()
+	title_pulse.tween_interval(0.42)
+	title_pulse.tween_property(result_title, "scale", Vector2(1.08, 1.08), 0.2)
+	title_pulse.tween_property(result_title, "scale", Vector2.ONE, 0.22)
+	if local_won:
+		title_pulse.set_loops(3)
+	elif not draw_result:
+		var defeat_shake := create_tween()
+		defeat_shake.tween_interval(0.18)
+		for angle in [0.025, -0.02, 0.014, -0.008, 0.0]:
+			defeat_shake.tween_property(result_panel, "rotation", angle, 0.07)
+
+	var unlock_buttons := create_tween()
+	unlock_buttons.tween_interval(0.7)
+	unlock_buttons.tween_callback(func():
+		retry_button.disabled = false
+		menu_button.disabled = false
+		next_stage_button.disabled = false
+	)
+
+
+func _stop_match_entities() -> void:
 	if mobile_controls and mobile_controls.has_method("set_controls_enabled"):
 		mobile_controls.set_controls_enabled(false)
-
 	for bullet in get_tree().get_nodes_in_group("bullets"):
 		bullet.queue_free()
-
 	for pickup in get_tree().get_nodes_in_group("pickups"):
 		pickup.queue_free()
-
 	for player_node in _players_by_slot.values():
 		if is_instance_valid(player_node):
 			player_node.set_physics_process(false)
-
 	for enemy in get_tree().get_nodes_in_group("enemy_tanks"):
 		enemy.set_physics_process(false)
 
 
 func _update_hud() -> void:
-	info_label.text = "S%02d | %s | %s" % [_stage_data.get("number", 1), _stage_data.get("name", "Arena"), _get_mode_label()]
+	_update_network_info_label()
 	brief_label.text = _build_stage_brief()
 	status_label.text = "Durum %s | Dusman %d" % [_status_text, _alive_enemies]
 	stats_label.text = _build_stats_summary()
@@ -755,6 +1025,13 @@ func _update_hud() -> void:
 		_last_health_by_slot[_local_player_slot] = int(local_player.health)
 
 
+func _update_network_info_label() -> void:
+	var network_suffix := ""
+	if _is_online_mode():
+		network_suffix = " | %s" % NetSession.get_network_quality_text()
+	info_label.text = "S%02d | %s | %s%s" % [_stage_data.get("number", 1), _stage_data.get("name", "Arena"), _get_mode_label(), network_suffix]
+
+
 func _update_shield_hud(delta: float) -> void:
 	var local_player = _get_local_player()
 	var remaining := 0.0
@@ -765,13 +1042,75 @@ func _update_shield_hud(delta: float) -> void:
 
 	shield_bar.value = lerpf(float(shield_bar.value), ratio, minf(delta * 10.0, 1.0))
 	shield_label.text = "KALKAN  %.1f sn" % remaining
-	var target_alpha := 1.0 if remaining > 0.0 else 0.0
-	var tint := shield_hud.modulate
-	tint.a = move_toward(tint.a, target_alpha, delta * 4.5)
-	shield_hud.modulate = tint
-	shield_hud.visible = tint.a > 0.01 or remaining > 0.0
-	shield_backdrop.modulate = tint
-	shield_backdrop.visible = shield_hud.visible
+	shield_hud.visible = remaining > 0.03 and not _match_over
+	shield_backdrop.visible = false
+
+
+func _on_retry_requested() -> void:
+	if retry_button.disabled or _rematch_transition_started:
+		return
+	if not (_is_online_mode() and _is_vs_mode()):
+		_restart_level()
+		return
+	if not _match_over:
+		return
+	if not NetSession.is_peer_connected():
+		result_subtitle.text = "Rakip bağlı değil. Rövanş için iki oyuncu da odada olmalı."
+		return
+	if _rematch_ready_slots.has(_local_player_slot):
+		return
+	_rematch_ready_slots[_local_player_slot] = true
+	_update_rematch_ui()
+	NetSession.send_rematch_vote(true)
+
+
+func _on_online_rematch_status_updated(ready_slots: Array, start: bool, _round_id: int) -> void:
+	if not (_is_vs_mode() and _match_over) or _rematch_transition_started:
+		return
+	_rematch_ready_slots.clear()
+	for slot_value in ready_slots:
+		var slot := int(slot_value)
+		if slot in [1, 2]:
+			_rematch_ready_slots[slot] = true
+	_update_rematch_ui()
+	if start and _rematch_ready_slots.size() == 2:
+		_begin_synchronized_rematch()
+
+
+func _update_rematch_ui() -> void:
+	if not (_is_vs_mode() and _match_over):
+		return
+	var ready_count := _rematch_ready_slots.size()
+	var local_ready := _rematch_ready_slots.has(_local_player_slot)
+	var remote_slot := 2 if _local_player_slot == 1 else 1
+	var remote_ready := _rematch_ready_slots.has(remote_slot)
+	if ready_count >= 2:
+		result_subtitle.text = "Rövanş onayı 2/2 • Yeni raund başlıyor..."
+		retry_button.text = "RAUND BAŞLIYOR"
+		retry_button.disabled = true
+	elif local_ready:
+		result_subtitle.text = "Rövanş onayı 1/2 • Rakibin onayı bekleniyor."
+		retry_button.text = "ONAY VERİLDİ • BEKLENİYOR"
+		retry_button.disabled = true
+	elif remote_ready:
+		result_subtitle.text = "Rakip rövanşa hazır • Başlamak için sen de onayla."
+		retry_button.text = "RÖVANŞI ONAYLA"
+		retry_button.disabled = false
+
+
+func _begin_synchronized_rematch() -> void:
+	if _rematch_transition_started:
+		return
+	_rematch_transition_started = true
+	retry_button.disabled = true
+	retry_button.text = "RAUND BAŞLIYOR"
+	result_subtitle.text = "Rövanş onayı 2/2 • Yeni raund başlıyor..."
+	NetSession.clear_match_buffers()
+	call_deferred("_change_to_arena")
+
+
+func _change_to_arena() -> void:
+	get_tree().change_scene_to_file("res://src/scenes/prototype_arena.tscn")
 
 
 func _restart_level() -> void:
@@ -865,6 +1204,10 @@ func _apply_black_cat_theme() -> void:
 		label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.92))
 		label.add_theme_constant_override("shadow_offset_x", 2)
 		label.add_theme_constant_override("shadow_offset_y", 2)
+	wave_label.add_theme_color_override("font_outline_color", Color(0.02, 0.03, 0.04, 0.92))
+	wave_label.add_theme_constant_override("outline_size", 5)
+	alert_label.add_theme_color_override("font_outline_color", Color(0.02, 0.03, 0.04, 0.94))
+	alert_label.add_theme_constant_override("outline_size", 6)
 	shield_label.add_theme_color_override("font_color", Color("#bfeaff"))
 	shield_bar.add_theme_stylebox_override("background", BlackCatTheme.make_panel_style(Color("#111a21"), Color("#38576a"), 4, 1))
 	shield_bar.add_theme_stylebox_override("fill", BlackCatTheme.make_panel_style(Color("#72c9f4"), Color("#c5efff"), 4, 1))
@@ -887,6 +1230,13 @@ func _cell_to_world(cell: Vector2i) -> Vector2:
 func _is_reserved_cell(cell: Vector2i) -> bool:
 	if (_stage_has_core() and BASE_RESERVED_CELLS.has(cell)) or SPAWN_POINTS.has(cell):
 		return true
+	if _is_vs_mode():
+		for cache_cell in VS_CACHE_CELLS:
+			if absi(cell.x - cache_cell.x) <= 1 and absi(cell.y - cache_cell.y) <= 1:
+				return true
+		for center_cell in VS_CENTER_RESERVED_CELLS:
+			if absi(cell.x - center_cell.x) <= 1 and absi(cell.y - center_cell.y) <= 1:
+				return true
 
 	for spawn_cell in _player_spawn_cells:
 		if absi(cell.x - spawn_cell.x) <= 1 and absi(cell.y - spawn_cell.y) <= 1:
@@ -928,20 +1278,74 @@ func notify_enemy_destroyed_visual(at_position: Vector2, enemy_type: String) -> 
 	else:
 		burst.color = Color("#ffd166")
 
+	_configure_burst(burst)
 	_queue_runtime_child(burst)
 
-	if camera and camera.has_method("add_shake"):
-		camera.add_shake(0.16, 4.0)
+	_add_camera_shake(0.16, 4.0)
 
 
 func notify_player_hit_visual(at_position: Vector2) -> void:
 	var burst = IMPACT_BURST_SCENE.instantiate()
 	burst.global_position = at_position
 	burst.color = Color("#ff7b72")
+	_configure_burst(burst)
 	_queue_runtime_child(burst)
 
-	if camera and camera.has_method("add_shake"):
-		camera.add_shake(0.1, 2.8)
+	_add_camera_shake(0.1, 2.8)
+
+
+func notify_tank_hit_result(at_position: Vector2, source_team: String, target_team: String, damage: int, applied: bool, destroyed: bool) -> void:
+	if not _is_authority():
+		return
+	_hit_event_sequence += 1
+	_last_hit_event = {
+		"sequence": _hit_event_sequence,
+		"x": at_position.x,
+		"y": at_position.y,
+		"source_team": source_team,
+		"target_team": target_team,
+		"damage": maxi(damage, 1),
+		"applied": applied,
+		"destroyed": destroyed
+	}
+	_hit_event_lifetime = 0.45
+	_present_hit_event(_last_hit_event)
+	# Send immediately instead of waiting for the 20 Hz world tick. This keeps
+	# hit feedback crisp and also delivers the final IMHA event after match end.
+	if _is_online_mode() and NetSession.is_peer_connected():
+		NetSession.send_snapshot(_build_world_snapshot())
+
+
+func _present_hit_event(hit_event: Dictionary) -> void:
+	if hit_event.is_empty():
+		return
+	var sequence := int(hit_event.get("sequence", 0))
+	if sequence <= _last_applied_hit_event_sequence:
+		return
+	_last_applied_hit_event_sequence = sequence
+	var local_team := "player_%d" % _local_player_slot if _is_vs_mode() else "player"
+	var source_team := String(hit_event.get("source_team", ""))
+	var target_team := String(hit_event.get("target_team", ""))
+	var local_scored := source_team == local_team
+	var local_was_hit := target_team == local_team
+	if not local_scored and not local_was_hit:
+		return
+	var at_position := Vector2(float(hit_event.get("x", 0.0)), float(hit_event.get("y", 0.0)))
+	var applied := bool(hit_event.get("applied", false))
+	var destroyed := bool(hit_event.get("destroyed", false))
+	_spawn_hit_confirmation(at_position, local_scored, int(hit_event.get("damage", 1)), destroyed, not applied)
+	_play_sfx("impact", 1.04 if destroyed else (1.0 if local_scored else 0.9), 0.72)
+	if local_scored:
+		MobileFeedback.confirmed_hit()
+
+
+func _spawn_hit_confirmation(at_position: Vector2, local_scored: bool, damage: int, destroyed: bool = false, blocked: bool = false) -> void:
+	var confirmation = HitConfirmation.new()
+	confirmation.global_position = at_position
+	confirmation.configure(local_scored, damage, destroyed, blocked, GameSession.get_effects_intensity(), GameSession.is_reduced_motion_enabled())
+	_queue_runtime_child(confirmation)
+	if local_scored:
+		_add_camera_shake(0.055, 1.5)
 
 
 func _configure_capture_request() -> void:
@@ -954,6 +1358,10 @@ func _configure_capture_request() -> void:
 			_capture_stage_index = requested_stage - 1
 		elif argument.begins_with("--capture-delay-frames="):
 			_capture_delay_frames = maxi(int(argument.trim_prefix("--capture-delay-frames=")), 45)
+		elif argument.begins_with("--capture-size="):
+			var dimensions := argument.trim_prefix("--capture-size=").to_lower().split("x", false, 2)
+			if dimensions.size() == 2:
+				_capture_size = Vector2i(maxi(int(dimensions[0]), 320), maxi(int(dimensions[1]), 180))
 
 	if _capture_requested and _capture_output_path.is_empty():
 		_capture_output_path = OS.get_user_data_dir().path_join("aksoy-tank-capture.png")
@@ -965,10 +1373,16 @@ func _capture_store_frame() -> void:
 		await get_tree().process_frame
 
 	var image := get_viewport().get_texture().get_image()
+	if _capture_size.x > 0 and _capture_size.y > 0 and image.get_size() != _capture_size:
+		image.resize(_capture_size.x, _capture_size.y, Image.INTERPOLATE_LANCZOS)
+	if image.get_format() != Image.FORMAT_RGB8:
+		image.convert(Image.FORMAT_RGB8)
 	var result := image.save_png(_capture_output_path)
 	if result != OK:
 		push_error("Store capture could not be saved: %s" % _capture_output_path)
 
+	AudioManager.stop_all()
+	await get_tree().process_frame
 	get_tree().quit()
 
 
@@ -1006,6 +1420,71 @@ func _maybe_spawn_pickup(enemy_type: String, at_position: Vector2) -> void:
 	pickup.configure(_roll_pickup_type(enemy_type))
 	pickup.collected.connect(_on_pickup_collected)
 	_queue_runtime_child(pickup)
+
+
+func _tick_vs_corner_caches(delta: float) -> void:
+	if not _is_vs_mode() or _vs_cache_wave >= VS_CACHE_MAX_WAVES:
+		return
+	_vs_cache_timer = maxf(_vs_cache_timer - delta, 0.0)
+	if _vs_cache_timer > 0.0:
+		return
+	_spawn_vs_corner_caches()
+	_vs_cache_timer = VS_CACHE_REPEAT_DELAY
+
+
+func _spawn_vs_corner_caches() -> void:
+	if not _is_vs_mode() or _vs_cache_wave >= VS_CACHE_MAX_WAVES:
+		return
+	var pickup_type := "turbo" if _vs_cache_wave == 0 else "overdrive"
+	for cache_cell in VS_CACHE_CELLS:
+		var pickup = PICKUP_SCENE.instantiate()
+		pickup.global_position = _cell_to_world(cache_cell)
+		pickup.network_id = _claim_network_id()
+		pickup.lifetime = VS_CACHE_LIFETIME
+		pickup.configure(pickup_type)
+		pickup.collected.connect(_on_pickup_collected)
+		_queue_runtime_child(pickup)
+	_vs_cache_wave += 1
+	var cache_label := "Turbo Palet" if pickup_type == "turbo" else "Overdrive"
+	_show_alert("Köşe destekleri açıldı: %s. Risk al, üstünlüğü kap!" % cache_label, Color("#f3c868"))
+
+
+func _tick_vs_center_cache(delta: float) -> void:
+	if not _is_vs_mode() or _vs_center_wave >= VS_CENTER_MAX_WAVES:
+		return
+	_vs_center_timer = maxf(_vs_center_timer - delta, 0.0)
+	if _vs_center_timer > 0.0:
+		return
+	_spawn_vs_center_cache()
+	_vs_center_timer = VS_CENTER_REPEAT_DELAY
+
+
+func _spawn_vs_center_cache() -> void:
+	if not _is_vs_mode() or _vs_center_wave >= VS_CENTER_MAX_WAVES or _has_active_pickup_type("tactical"):
+		return
+	var pickup = PICKUP_SCENE.instantiate()
+	pickup.global_position = VS_CENTER_POSITION
+	pickup.network_id = _claim_network_id()
+	pickup.lifetime = VS_CENTER_LIFETIME
+	pickup.configure("tactical")
+	pickup.collected.connect(_on_pickup_collected)
+	_queue_runtime_child(pickup)
+	_vs_center_wave += 1
+	_show_alert("Merkez çekirdeği açıldı. Alana koşmak hızlıdır ama açık hedef olursun!", Color("#d7b4ff"))
+
+
+func _has_active_pickup_type(pickup_type: String) -> bool:
+	for pickup in get_tree().get_nodes_in_group("pickups"):
+		if String(pickup.pickup_type) == pickup_type:
+			return true
+	return false
+
+
+func _has_active_corner_cache() -> bool:
+	for pickup in get_tree().get_nodes_in_group("pickups"):
+		if String(pickup.pickup_type) in ["turbo", "overdrive"]:
+			return true
+	return false
 
 
 func _roll_pickup_type(enemy_type: String) -> String:
@@ -1083,6 +1562,7 @@ func _on_pickup_collected(pickup_type: String, at_position: Vector2, collector: 
 
 	_spawn_pickup_burst(at_position, result["tint"])
 	MobileFeedback.reward()
+	_play_sfx("pickup", 1.0, 0.88)
 	_show_alert("%s | %s: %s" % [result["title"], owner_name, result["detail"]], result["tint"])
 	_update_hud()
 
@@ -1115,10 +1595,23 @@ func _spawn_pickup_burst(at_position: Vector2, tint: Color) -> void:
 	var burst = IMPACT_BURST_SCENE.instantiate()
 	burst.global_position = at_position
 	burst.color = tint
+	_configure_burst(burst)
 	_queue_runtime_child(burst)
 
-	if camera and camera.has_method("add_shake"):
-		camera.add_shake(0.08, 2.0)
+	_add_camera_shake(0.08, 2.0)
+
+
+func _configure_burst(burst: Node) -> void:
+	burst.intensity = GameSession.get_effects_intensity()
+	burst.reduced_motion = GameSession.is_reduced_motion_enabled()
+
+
+func _add_camera_shake(duration: float, strength: float) -> void:
+	if GameSession.is_reduced_motion_enabled() or not camera or not camera.has_method("add_shake"):
+		return
+	var intensity := GameSession.get_effects_intensity()
+	if intensity > 0.01:
+		camera.add_shake(duration * lerpf(0.5, 1.0, intensity), strength * intensity)
 
 
 func _show_alert(text: String, tint: Color) -> void:
@@ -1218,7 +1711,9 @@ func _get_max_alive_cap() -> int:
 
 func _build_stats_summary() -> String:
 	if _is_vs_mode():
-		return "Ayakta kalan tank %d/2" % get_active_player_targets().size()
+		var center_status := "SAHADA" if _has_active_pickup_type("tactical") else ("%ds" % ceili(_vs_center_timer) if _vs_center_wave < VS_CENTER_MAX_WAVES else "BİTTİ")
+		var corner_status := "SAHADA" if _has_active_corner_cache() else ("%ds" % ceili(_vs_cache_timer) if _vs_cache_wave < VS_CACHE_MAX_WAVES else "BİTTİ")
+		return "Tank %d/2 | Merkez %s | Köşe %s" % [get_active_player_targets().size(), center_status, corner_status]
 	if _objective_type == "command_hunt" or _objective_type == "boss_hunt":
 		return "Sahada %d | Hedef %d/%d" % [_alive_enemies, _objective_target_total - _objective_target_remaining, _objective_target_total]
 
@@ -1228,7 +1723,7 @@ func _build_stats_summary() -> String:
 
 func _build_stage_brief() -> String:
 	if _is_vs_mode():
-		return "Tank duellosu | Son ayakta kalan kazanir."
+		return "Tank düellosu | Merkez çekirdeği küçük avantaj sağlar; açık alanda risklidir."
 	if _objective_type == "eliminate":
 		return _stage_data.get("tagline", "Ozgun savunma duzeni.")
 
@@ -1333,9 +1828,12 @@ func _apply_remote_player_input() -> void:
 
 
 func _on_online_peer_status_changed(connected: bool, _count: int) -> void:
+	_apply_online_player_profiles()
 	_update_wait_state(not connected)
 
 	if connected:
+		if _is_authority():
+			_last_sent_wall_revision = -1
 		var connected_text := "Rakip baglandi. Duello basliyor." if _is_vs_mode() else "Es oyuncu baglandi. Operasyon basliyor."
 		_show_alert(connected_text, _get_theme_color("hud_accent", Color("#f2d48f")))
 		if _is_authority() and spawn_timer.is_stopped() and not _match_over and not _is_vs_mode():
@@ -1343,6 +1841,47 @@ func _on_online_peer_status_changed(connected: bool, _count: int) -> void:
 	else:
 		_show_alert("Baglanti kesildi. Oda es oyuncuyu bekliyor.", Color("#ffb584"))
 
+	_update_hud()
+
+
+func _on_online_room_joined(_room_code: String, role: String, slot: int) -> void:
+	_local_player_slot = slot
+	_on_online_authority_changed(role, slot)
+	_configure_mobile_controls()
+	_apply_online_player_profiles()
+	_update_wait_state(not NetSession.is_peer_connected())
+
+
+func _on_online_authority_changed(_role: String, slot: int) -> void:
+	_local_player_slot = slot
+	var authority := _is_authority()
+	for player_slot in range(1, _player_count + 1):
+		var player_node = _get_player_by_slot(player_slot)
+		if not is_instance_valid(player_node):
+			continue
+		if player_slot == _local_player_slot:
+			player_node.set_control_mode("local")
+			player_node.set_spawn_bullets_enabled(authority)
+		elif authority:
+			player_node.set_control_mode("network_input")
+			player_node.set_spawn_bullets_enabled(true)
+		else:
+			player_node.set_control_mode("replica")
+			player_node.set_spawn_bullets_enabled(false)
+	for enemy in get_tree().get_nodes_in_group("enemy_tanks"):
+		enemy.set_replica_mode(not authority)
+	for bullet in get_tree().get_nodes_in_group("bullets"):
+		bullet.set_replica_mode(not authority)
+	for pickup in get_tree().get_nodes_in_group("pickups"):
+		pickup.set_replica_mode(not authority)
+	if authority:
+		_pending_network_snapshot.clear()
+		_last_sent_wall_revision = -1
+	_show_alert("Oda kontrolu devralindi." if authority else "Odaya yeniden baglanildi.", _get_theme_color("hud_accent", Color("#f2d48f")))
+
+
+func _on_online_profiles_updated() -> void:
+	_apply_online_player_profiles()
 	_update_hud()
 
 
@@ -1354,17 +1893,26 @@ func _on_online_snapshot_updated() -> void:
 	if snapshot.is_empty():
 		return
 
-	_apply_world_snapshot(snapshot)
+	# Network packets arrive during the idle loop. Keep only the newest snapshot
+	# and apply it on the next physics tick to avoid mixed-clock transform jitter.
+	_pending_network_snapshot = snapshot
 
 
 func _build_world_snapshot() -> Dictionary:
+	var walls_changed := _last_sent_wall_revision != _wall_revision
+	var wall_snapshot := _serialize_walls() if walls_changed else []
+	if walls_changed:
+		_last_sent_wall_revision = _wall_revision
 	return {
 		"players": _serialize_players(),
 		"enemies": _serialize_enemies(),
 		"bullets": _serialize_bullets(),
 		"pickups": _serialize_pickups(),
-		"walls": _serialize_walls(),
+		"walls": wall_snapshot,
+		"walls_changed": walls_changed,
+		"walls_revision": _wall_revision,
 		"meta": {
+			"hit_event": _last_hit_event.duplicate(true) if _hit_event_lifetime > 0.0 else {},
 			"spawned": _spawned_enemies,
 			"alive": _alive_enemies,
 			"total": _total_enemies,
@@ -1375,6 +1923,13 @@ func _build_world_snapshot() -> Dictionary:
 			"objective_remaining": _objective_target_remaining,
 			"status_text": _status_text,
 			"match_over": _match_over,
+			"winner_slot": _winner_slot,
+			"result_is_draw": _result_is_draw,
+			"elimination_text": _elimination_text,
+			"vs_cache_timer": _vs_cache_timer,
+			"vs_cache_wave": _vs_cache_wave,
+			"vs_center_timer": _vs_center_timer,
+			"vs_center_wave": _vs_center_wave,
 			"result_title": result_title.text,
 			"result_subtitle": result_subtitle.text,
 			"next_stage_visible": next_stage_button.visible
@@ -1430,11 +1985,14 @@ func _serialize_walls() -> Array:
 
 
 func _apply_world_snapshot(snapshot: Dictionary) -> void:
+	var incoming_wall_revision := int(snapshot.get("walls_revision", -1))
+	if bool(snapshot.get("walls_changed", false)) and incoming_wall_revision > _last_applied_wall_revision:
+		_apply_wall_snapshot(Array(snapshot.get("walls", [])))
+		_last_applied_wall_revision = incoming_wall_revision
 	_apply_player_snapshot(Array(snapshot.get("players", [])))
 	_apply_enemy_snapshot(Array(snapshot.get("enemies", [])))
 	_apply_bullet_snapshot(Array(snapshot.get("bullets", [])))
 	_apply_pickup_snapshot(Array(snapshot.get("pickups", [])))
-	_apply_wall_snapshot(Array(snapshot.get("walls", [])))
 	_apply_meta_snapshot(Dictionary(snapshot.get("meta", {})))
 	_update_hud()
 
@@ -1455,7 +2013,7 @@ func _apply_player_snapshot(players: Array) -> void:
 			var new_player = PLAYER_TANK_SCENE.instantiate()
 			new_player.name = "PlayerTank%d" % slot
 			add_child(new_player)
-			var profile := Dictionary(PLAYER_PROFILES[slot].duplicate(true))
+			var profile := _build_player_profile(slot)
 			profile["team"] = "player_%d" % slot if _is_vs_mode() else "player"
 			new_player.configure_player(profile)
 			new_player.set_mobile_controls(mobile_controls)
@@ -1464,10 +2022,10 @@ func _apply_player_snapshot(players: Array) -> void:
 			_players_by_slot[slot] = new_player
 			player_node = new_player
 
-		if slot != _local_player_slot or not _is_online_mode():
-			player_node.apply_snapshot(player_state)
+		if slot == _local_player_slot and _is_online_mode():
+			player_node.apply_snapshot(player_state, "reconcile")
 		else:
-			player_node.apply_snapshot(player_state)
+			player_node.apply_snapshot(player_state, "smooth")
 
 
 func _apply_enemy_snapshot(enemies: Array) -> void:
@@ -1546,18 +2104,23 @@ func _apply_wall_snapshot(walls: Array) -> void:
 			_spawn_wall(Vector2i(int(wall_state.get("cell_x", 0)), int(wall_state.get("cell_y", 0))), String(wall_state.get("block_type", "brick")), int(wall_state.get("durability", 1)))
 			existing = get_node_or_null(NodePath(wall_name))
 		if existing:
-			existing.block_type = String(wall_state.get("block_type", existing.block_type))
-			existing.durability = int(wall_state.get("durability", existing.durability))
-			if existing.has_method("apply_theme"):
-				existing.apply_theme(_theme_palette)
-			existing.queue_redraw()
+			var next_type := String(wall_state.get("block_type", existing.block_type))
+			var next_durability := int(wall_state.get("durability", existing.durability))
+			if existing.block_type != next_type or existing.durability != next_durability:
+				existing.block_type = next_type
+				existing.durability = next_durability
+				existing.queue_redraw()
 
 	for child in get_children():
 		if child is StaticBody2D and child.name.begins_with("Wall") and not wall_names.has(child.name):
+			child.collision_layer = 0
+			child.collision_mask = 0
 			child.queue_free()
 
 
 func _apply_meta_snapshot(meta: Dictionary) -> void:
+	var was_match_over := _match_over
+	_present_hit_event(Dictionary(meta.get("hit_event", {})))
 	_spawned_enemies = int(meta.get("spawned", _spawned_enemies))
 	_alive_enemies = int(meta.get("alive", _alive_enemies))
 	_total_enemies = int(meta.get("total", _total_enemies))
@@ -1568,14 +2131,27 @@ func _apply_meta_snapshot(meta: Dictionary) -> void:
 	_objective_target_remaining = int(meta.get("objective_remaining", _objective_target_remaining))
 	_status_text = String(meta.get("status_text", _status_text))
 	_match_over = bool(meta.get("match_over", _match_over))
+	_winner_slot = int(meta.get("winner_slot", _winner_slot))
+	_result_is_draw = bool(meta.get("result_is_draw", _result_is_draw))
+	_elimination_text = String(meta.get("elimination_text", _elimination_text))
+	_vs_cache_timer = float(meta.get("vs_cache_timer", _vs_cache_timer))
+	_vs_cache_wave = int(meta.get("vs_cache_wave", _vs_cache_wave))
+	_vs_center_timer = float(meta.get("vs_center_timer", _vs_center_timer))
+	_vs_center_wave = int(meta.get("vs_center_wave", _vs_center_wave))
 
 	if _match_over:
-		result_title.text = String(meta.get("result_title", result_title.text))
-		result_subtitle.text = String(meta.get("result_subtitle", result_subtitle.text))
+		var local_won := false
+		if _is_vs_mode():
+			local_won = _configure_local_vs_result()
+		else:
+			result_title.text = String(meta.get("result_title", result_title.text))
+			result_subtitle.text = String(meta.get("result_subtitle", result_subtitle.text))
+			local_won = _status_text == "Zafer"
 		next_stage_button.visible = bool(meta.get("next_stage_visible", false))
 		result_overlay.visible = true
-		if mobile_controls and mobile_controls.has_method("set_controls_enabled"):
-			mobile_controls.set_controls_enabled(false)
+		_stop_match_entities()
+		if not was_match_over or not _result_animation_played:
+			_play_result_presentation(local_won, _result_is_draw)
 
 
 func _name_to_cell(name: String) -> Vector2i:
@@ -1599,6 +2175,7 @@ func _build_combat_balance() -> Dictionary:
 	var stage_index := int(_stage_data.get("index", 0))
 	if _is_vs_mode():
 		balance["spawn_shield_duration"] = 1.5
+		balance["player_fire_scale"] = 1.1
 		balance["coop_enemy_bonus_ratio"] = 0.0
 		return balance
 

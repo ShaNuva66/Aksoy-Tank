@@ -1,50 +1,54 @@
 # Privacy Policy
 
-Last updated: April 15, 2026
+Last updated: September 3, 2026
 
-Aksoy Tank is a mobile action game with offline play and optional online co-op and VS modes.
+This policy explains how Aksoy Tank, provided by Atalay Aksoy, processes data in offline play and the optional online co-op and 1v1 modes.
 
-## What we collect
+## Data stored on the device
 
-The game is not designed around user accounts, advertising profiles, analytics tracking, or personal profile creation.
+The game stores unlocked and selected stages, control and session preferences, the room code, player name, and selected tank style locally on the user's device. This information is not used for advertising or analytics.
 
-When you play offline, campaign progress is saved locally on your device so unlocked stages can be remembered between sessions.
+## Data processed during online play
 
-## Online play
-
-If you use an optional online co-op or VS mode, the game sends only the session data needed to run the match, such as:
+When online co-op or 1v1 is selected, the game sends the following data to the Aksoy Tank relay server:
 
 - room code
-- build version
-- gameplay input and match state updates
+- app build version
+- player-entered name or nickname
+- selected tank style
+- gameplay input and live match-state messages
 
-This traffic is used only to connect players and keep the match synchronized. It is not used for advertising or analytics.
+The player name, tank style, and match data required to run the game are sent to the other player in the same room. A real name is not required; players can use a nickname.
 
-## Local gameplay data
+## Purpose and retention
 
-Local campaign progress:
+Online data is processed only to connect players, run the match, measure latency, and protect the connection. Room and match data is not written to a persistent gameplay database and is removed from server memory when the room closes.
 
-- stays on the device unless you use online features
-- is not linked to a named personal profile inside the game
-- can be cleared by deleting saved data in the app
+The hosting infrastructure may temporarily process technical connection information such as an IP address to route traffic and protect service availability. It is not used for advertising, tracking, analytics, or user profiling.
 
-## Analytics, ads, and accounts
+## Sharing and service providers
 
-The current version of the game does not use:
+Data is not sold. The hosting provider processes data only as a service provider for online functionality. The player name, tank style, and required match data are visible only to the opponent connected with the same room code.
 
-- account login
-- analytics SDKs
-- advertising SDKs
-- third-party ad networks
+## Security
+
+Production online traffic is encrypted in transit using TLS over `wss://`. Aksoy Tank does not currently use accounts, chat, advertising SDKs, analytics SDKs, or third-party ad networks.
+
+## User choices
+
+- Solo mode can be played without an internet connection.
+- A nickname can be used instead of a real name.
+- Local game data can be removed with the in-game "Delete Saved Data" option or by clearing the app's data.
+- There is no separate account-deletion process because the game does not create accounts or retain match data permanently.
 
 ## Children
 
-The game is designed as a general audience arcade action experience and does not knowingly collect personal information from children.
+Aksoy Tank is a general-audience arcade game and is not intended to knowingly collect personal information from children. Players should not enter real personal information as an online player name.
 
 ## Changes
 
-If gameplay features, online infrastructure, analytics, ads, or cloud saving change in a future release, this policy must be updated before that version is published.
+This policy will be updated before a release that changes data handling, online infrastructure, advertising, analytics, accounts, or cloud saving.
 
 ## Contact
 
-A public support email and privacy policy URL must be added in Play Console before release.
+Questions can be sent to `atalayaksoy1@gmail.com`. Public policy URL: `https://atify.com.tr/aksoy-tank/privacy`.

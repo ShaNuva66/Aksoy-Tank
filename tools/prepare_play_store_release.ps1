@@ -4,9 +4,16 @@ $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $desktopRoot = Split-Path $projectRoot -Parent
 $outputDir = Join-Path $desktopRoot "aksoy-tank-builds"
 $outputAabPath = Join-Path $outputDir "aksoy-tank-release.aab"
+$outputManifestPath = Join-Path $outputDir "aksoy-tank-release-AndroidManifest.xml"
 $outputApkPath = Join-Path $outputDir "aksoy-tank-debug.apk"
 $releaseNotesSource = Join-Path $projectRoot "docs\play-store-guncelleme-notlari.md"
-$releaseNotesOutput = Join-Path $outputDir "guncelleme-notlari-1.4.0.txt"
+$releaseNotesOutput = Join-Path $outputDir "guncelleme-notlari-2.0.0.txt"
+$releaseNotesTrSource = Join-Path $projectRoot "docs\release-notes-tr-TR.txt"
+$releaseNotesEnSource = Join-Path $projectRoot "docs\release-notes-en-US.txt"
+$desktopOutputAab = Join-Path ([Environment]::GetFolderPath("Desktop")) "Aksoy-Tank-2.0.0-Play-Store.aab"
+$desktopReleaseNotes = Join-Path ([Environment]::GetFolderPath("Desktop")) "Aksoy-Tank-2.0.0-Guncelleme-Notlari.txt"
+$desktopReleaseNotesTr = Join-Path ([Environment]::GetFolderPath("Desktop")) "Aksoy-Tank-2.0.0-Play-Notu-tr-TR.txt"
+$desktopReleaseNotesEn = Join-Path ([Environment]::GetFolderPath("Desktop")) "Aksoy-Tank-2.0.0-Play-Notu-en-US.txt"
 
 function Get-GodotExecutable {
 	$candidates = @(
@@ -84,7 +91,7 @@ function Test-AndroidPackageMetadata {
 
 	$badging = (& $aaptExe dump badging $ApkPath) -join "`n"
 	if ($LASTEXITCODE -ne 0) { throw "APK manifest bilgisi okunamadi." }
-	if ($badging -notmatch "package: name='com\.atalay\.aksoytank' versionCode='14' versionName='1\.4\.0'") {
+	if ($badging -notmatch "package: name='com\.atalay\.aksoytank' versionCode='22' versionName='2\.0\.0'") {
 		throw "APK paket veya surum bilgisi beklenen degerde degil."
 	}
 	if ($badging -notmatch "sdkVersion:'24'") { throw "APK minimum SDK 24 degil." }
@@ -105,11 +112,14 @@ function Test-AabSignature {
 }
 
 function Test-AabManifestMetadata {
-	$manifestPath = Join-Path $projectRoot "android\build\build\intermediates\bundle_manifest\standardRelease\processApplicationManifestStandardReleaseForBundle\AndroidManifest.xml"
-	if (-not (Test-Path $manifestPath)) { throw "AAB release manifesti bulunamadi." }
-	$manifest = Get-Content $manifestPath -Raw
+	param(
+		[string]$ManifestPath
+	)
+
+	if (-not (Test-Path $ManifestPath)) { throw "AAB release manifesti bulunamadi: $ManifestPath" }
+	$manifest = Get-Content $ManifestPath -Raw
 	if ($manifest -notmatch 'package="com\.atalay\.aksoytank"') { throw "AAB paket adi hatali." }
-	if ($manifest -notmatch 'android:versionCode="14"' -or $manifest -notmatch 'android:versionName="1\.4\.0"') {
+	if ($manifest -notmatch 'android:versionCode="22"' -or $manifest -notmatch 'android:versionName="2\.0\.0"') {
 		throw "AAB surum bilgisi hatali."
 	}
 	if ($manifest -notmatch 'android:minSdkVersion="24"' -or $manifest -notmatch 'android:targetSdkVersion="36"') {
@@ -132,6 +142,31 @@ try {
 		if ($LASTEXITCODE -ne 0) { throw "Oynanis regresyon testi basarisiz." }
 	}
 
+	Invoke-Step "Profesyonel hitbox regresyon testi" {
+		& $godotExe --headless --path $projectRoot --script res://tools/hitbox_regression_test.gd
+		if ($LASTEXITCODE -ne 0) { throw "Hitbox regresyon testi basarisiz." }
+	}
+
+	Invoke-Step "Duvar ve kose carpisma testi" {
+		& $godotExe --headless --path $projectRoot --script res://tools/wall_collision_regression_test.gd
+		if ($LASTEXITCODE -ne 0) { throw "Duvar carpisma testi basarisiz." }
+	}
+
+	Invoke-Step "Tank temas ve ayrilma testi" {
+		& $godotExe --headless --path $projectRoot --script res://tools/tank_separation_regression_test.gd
+		if ($LASTEXITCODE -ne 0) { throw "Tank ayrilma testi basarisiz." }
+	}
+
+	Invoke-Step "Cevrim ici yumusatma testi" {
+		& $godotExe --headless --path $projectRoot --script res://tools/network_smoothing_test.gd
+		if ($LASTEXITCODE -ne 0) { throw "Cevrim ici yumusatma testi basarisiz." }
+	}
+
+	Invoke-Step "Cevrim ici yeniden baglanma testi" {
+		& $godotExe --headless --path $projectRoot --script res://tools/network_resilience_test.gd
+		if ($LASTEXITCODE -ne 0) { throw "Yeniden baglanma testi basarisiz." }
+	}
+
 	Invoke-Step "Mobil kontrol smoke testi" {
 		& $godotExe --headless --path $projectRoot --script res://tools/mobile_touch_smoke_test.gd
 		if ($LASTEXITCODE -ne 0) { throw "Mobil kontrol smoke testi basarisiz." }
@@ -142,9 +177,34 @@ try {
 		if ($LASTEXITCODE -ne 0) { throw "60. bolum baslangic testi basarisiz." }
 	}
 
+	Invoke-Step "Etkilesimli ilk oyun egitimi testi" {
+		& $godotExe --headless --path $projectRoot --script res://tools/onboarding_regression_test.gd
+		if ($LASTEXITCODE -ne 0) { throw "Etkilesimli egitim testi basarisiz." }
+	}
+
+	Invoke-Step "60 bolum gercek tamamlama akisi testi" {
+		& $godotExe --headless --path $projectRoot --script res://tools/stage_completion_regression_test.gd
+		if ($LASTEXITCODE -ne 0) { throw "Bolum tamamlama testi basarisiz." }
+	}
+
+	Invoke-Step "Cevrim ici relay sunucu testi" {
+		Push-Location (Join-Path $projectRoot "online-relay")
+		try {
+			& python -m unittest -q test_relay.py
+			if ($LASTEXITCODE -ne 0) { throw "Relay sunucu testi basarisiz." }
+		} finally {
+			Pop-Location
+		}
+	}
+
 	Invoke-Step "Android ciktilari" {
 		& (Join-Path $projectRoot "tools\export_android.ps1")
 		if ($LASTEXITCODE -ne 0) { throw "Android export basarisiz." }
+	}
+
+	Invoke-Step "Android 7 / API 24 emulator testi" {
+		& (Join-Path $projectRoot "tools\test_android_7_emulator.ps1")
+		if ($LASTEXITCODE -ne 0) { throw "Android 7 emulator testi basarisiz." }
 	}
 
 	Invoke-Step "AAB mimari kontrolu" {
@@ -153,7 +213,7 @@ try {
 
 	Invoke-Step "Android API ve surum kontrolu" {
 		Test-AndroidPackageMetadata -ApkPath $outputApkPath
-		Test-AabManifestMetadata
+		Test-AabManifestMetadata -ManifestPath $outputManifestPath
 	}
 
 	Invoke-Step "AAB imza kontrolu" {
@@ -164,11 +224,19 @@ try {
 		Where-Object { $_.FullName -ne $releaseNotesOutput } |
 		Remove-Item -Force
 	Copy-Item -LiteralPath $releaseNotesSource -Destination $releaseNotesOutput -Force
+	Copy-Item -LiteralPath $outputAabPath -Destination $desktopOutputAab -Force
+	Copy-Item -LiteralPath $releaseNotesSource -Destination $desktopReleaseNotes -Force
+	Copy-Item -LiteralPath $releaseNotesTrSource -Destination $desktopReleaseNotesTr -Force
+	Copy-Item -LiteralPath $releaseNotesEnSource -Destination $desktopReleaseNotesEn -Force
 
 	Write-Host ""
 	Write-Host "Play Store paketi hazir:"
 	Write-Host " - $outputAabPath"
 	Write-Host " - $releaseNotesOutput"
+	Write-Host " - $desktopOutputAab"
+	Write-Host " - $desktopReleaseNotes"
+	Write-Host " - $desktopReleaseNotesTr"
+	Write-Host " - $desktopReleaseNotesEn"
 	Write-Host " - $(Join-Path $projectRoot 'assets\store\listing')"
 	Start-Process explorer.exe $outputDir
 } finally {

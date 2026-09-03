@@ -5,6 +5,7 @@
 - Oyun adi: `Aksoy Tank`
 - Paket adi: `com.atalay.aksoytank`
 - Kategori: Arcade / Action
+- Platform: Android
 - Fiyatlandirma: Free veya Paid secimi yayin gunu netlestirilebilir
 
 ## Kisa Aciklama
@@ -15,7 +16,7 @@ Defend the reactor core, outmaneuver armor, and clear 60 battle sectors.
 
 Aksoy Tank is a fast mobile arcade defense game built around pressure, positioning, and lane control.
 
-Push through 60 handcrafted sectors, crack defensive walls, protect the reactor core, and adapt to changing armor waves. Every arena is built to stay readable on touch screens while still rewarding quick movement, timing, and route changes.
+Push through 60 varied campaign sectors, crack defensive walls, protect priority targets when the mission calls for it, and adapt to changing armor waves. Every arena is built to stay readable on touch screens while still rewarding quick movement, timing, and route changes.
 
 What is inside:
 
@@ -23,6 +24,8 @@ What is inside:
 - multiple enemy and boss tank archetypes
 - virtual joystick plus fire button controls
 - local progress save and stage unlock flow
+- quick matchmaking or private room-code online co-op and 1v1 on Android
+- persistent audio, haptics, visual intensity, and reduced-motion options
 - short action-heavy sessions built for mobile play
 
 Design direction:
@@ -47,4 +50,5 @@ Hazirlanan dosyalar:
 - oyun adi baska markayla karisiyor mu
 - ilk 4 screenshot ozgun estetik veriyor mu
 - privacy policy linki eklendi mi
-- Data Safety formu "no data collected" gercegine uygun mu
+- privacy policy URL: `https://atify.com.tr/aksoy-tank/privacy`
+- Data Safety formunda online co-op/1V1 verisi "ephemeral processing" olarak beyan edildi mi

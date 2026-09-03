@@ -1,6 +1,7 @@
 extends StaticBody2D
 
 signal destroyed(block_type: String)
+signal state_changed
 
 @export var block_type: String = "brick"
 @export var durability: int = 1
@@ -27,6 +28,7 @@ func take_hit(_source_team: String = "", damage: int = 1) -> bool:
 
 	var applied_damage := 1 if block_type == "fortified" else maxi(damage, 1)
 	durability -= applied_damage
+	state_changed.emit()
 
 	if durability <= 0:
 		destroyed.emit(block_type)

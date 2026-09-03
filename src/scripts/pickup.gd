@@ -23,6 +23,11 @@ const PICKUP_STYLES := {
 		"core": Color("#8ff9b5"),
 		"glow": Color("#e3ffec")
 	},
+	"tactical": {
+		"label": "Taktik Cekirdek",
+		"core": Color("#b98cff"),
+		"glow": Color("#f1e8ff")
+	},
 	"fortify": {
 		"label": "Cekirdek Tahkimi",
 		"core": Color("#ffd97a"),
@@ -85,18 +90,18 @@ func _draw() -> void:
 	aura.a = 0.16
 	ring.a = 0.95
 
-	draw_circle(Vector2.ZERO, pulse + 8.0, aura)
-	draw_circle(Vector2.ZERO, pulse, core.darkened(0.2))
-	draw_arc(Vector2.ZERO, pulse + 5.0, 0.0, TAU, 32, ring, 3.0)
+	draw_circle(Vector2.ZERO, pulse + 8.0, aura, true, -1.0, true)
+	draw_circle(Vector2.ZERO, pulse, core.darkened(0.2), true, -1.0, true)
+	draw_arc(Vector2.ZERO, pulse + 5.0, 0.0, TAU, 32, ring, 3.0, true)
 
 	match pickup_type:
 		"repair":
 			draw_rect(Rect2(Vector2(-5.0, -14.0), Vector2(10.0, 28.0)), glow)
 			draw_rect(Rect2(Vector2(-14.0, -5.0), Vector2(28.0, 10.0)), glow)
 		"shield":
-			draw_arc(Vector2.ZERO, 10.0, PI * 0.18, PI * 0.82, 18, glow, 4.0)
-			draw_line(Vector2(-7.0, -2.0), Vector2(-7.0, 10.0), glow, 3.0)
-			draw_line(Vector2(7.0, -2.0), Vector2(7.0, 10.0), glow, 3.0)
+			draw_arc(Vector2.ZERO, 10.0, PI * 0.18, PI * 0.82, 18, glow, 4.0, true)
+			draw_line(Vector2(-7.0, -2.0), Vector2(-7.0, 10.0), glow, 3.0, true)
+			draw_line(Vector2(7.0, -2.0), Vector2(7.0, 10.0), glow, 3.0, true)
 		"overdrive":
 			draw_line(Vector2(-9.0, -10.0), Vector2(0.0, 0.0), glow, 4.0)
 			draw_line(Vector2(0.0, 0.0), Vector2(-5.0, 0.0), glow, 4.0)
@@ -106,6 +111,12 @@ func _draw() -> void:
 			draw_line(Vector2(-10.0, 8.0), Vector2(0.0, -12.0), glow, 4.0)
 			draw_line(Vector2(0.0, -12.0), Vector2(8.0, -2.0), glow, 4.0)
 			draw_line(Vector2(8.0, -2.0), Vector2(-2.0, 12.0), glow, 4.0)
+		"tactical":
+			draw_circle(Vector2.ZERO, 8.0, glow, false, 3.0, true)
+			draw_line(Vector2(-14.0, 0.0), Vector2(-6.0, 0.0), glow, 3.0, true)
+			draw_line(Vector2(6.0, 0.0), Vector2(14.0, 0.0), glow, 3.0, true)
+			draw_line(Vector2(0.0, -14.0), Vector2(0.0, -6.0), glow, 3.0, true)
+			draw_line(Vector2(0.0, 6.0), Vector2(0.0, 14.0), glow, 3.0, true)
 		"fortify":
 			draw_rect(Rect2(Vector2(-13.0, -9.0), Vector2(26.0, 18.0)), glow, false, 4.0)
 			draw_line(Vector2(-8.0, -9.0), Vector2(-8.0, -16.0), glow, 3.0)

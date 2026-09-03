@@ -242,6 +242,16 @@ static func _apply_layout_signature(stage: Dictionary, stage_number: int) -> voi
 	var marker_y := 2 + (stage_number % 3) * 3
 	brick_cells.append(Vector2i(marker_x, marker_y))
 	brick_cells.append(Vector2i(25 - marker_x, 12 - marker_y / 2))
+
+	# Encode the stage number into a low flank barricade. This gives every map a
+	# stable visual fingerprint without narrowing the wide central combat lanes.
+	for bit_index in range(6):
+		if (stage_number & (1 << bit_index)) != 0:
+			brick_cells.append(Vector2i(2 + bit_index, 13))
+	var flank_x := 18 + (stage_number - 1) % 6
+	brick_cells.append(Vector2i(flank_x, 12))
+	if stage_number % 2 == 0:
+		brick_cells.append(Vector2i(flank_x, 13))
 	stage["brick_cells"] = brick_cells
 
 
@@ -274,8 +284,13 @@ static func _reserved_cells_for_stage(stage: Dictionary) -> Dictionary:
 
 	for cell in base_cells:
 		reserved[cell] = true
-	for cell in spawn_cells:
-		reserved[cell] = true
+	# Keep a 3x3 deployment bay open around row 2. Large bosses have up to a
+	# 42 px radius and would overlap the top border or adjacent wall cells when
+	# spawned in the original single 48 px cell.
+	for spawn_cell in spawn_cells:
+		for x_offset in range(-1, 2):
+			for spawn_y in range(1, 4):
+				reserved[Vector2i(spawn_cell.x + x_offset, spawn_y)] = true
 	for cell in [player_cell, player_cell + Vector2i(-2, 0), player_cell + Vector2i(2, 0)]:
 		reserved[cell] = true
 

@@ -1,10 +1,10 @@
-# Online Co-op
+# Online Co-op ve 1V1
 
-`Aksoy Tank` artik oda kodlu online 2 kisilik co-op altyapisina sahip.
+`Aksoy Tank`, oda kodlu online co-op ve 1V1 destekler.
 
 ## Mimari
 
-- Relay turu: `WebSocket`
+- Relay turu: TLS korumali `WebSocket` (`WSS`)
 - Oda modeli: 2 oyuncu
 - Yetki modeli: `host-authoritative`
 - Veri akisi:
@@ -22,7 +22,8 @@
 
 ## Notlar
 
-- Bu ilk surum, kararlilik ve Play Store'a gidebilecek temel online akisa odaklidir.
-- Varsayilan `server_url` su anda yerel test icin `ws://127.0.0.1:8765/ws`.
-- Gercek cihazdan internet uzerinden oynamak icin relay'i `wss://` ile yayinlamak gerekir.
-- Host ayrilirsa oda bekleme durumuna geri doner.
+- Magaza sunucusu `wss://atify.com.tr/aksoy-tank/ws` adresindedir.
+- Sunucu adresi magazaya giden uygulamada sabittir; oyuncu yalnizca oda kodunu girer.
+- Hizli eslesme ayni mod ve uygulama surumundeki bekleyen oyunculari otomatik olarak ayni odaya alir.
+- Kisa baglanti kesintilerinde istemci uc kez otomatik yeniden baglanmayi dener.
+- Host ayrilirsa kalan oyuncu otomatik host olur ve oda yeni oyuncuyu beklemeye devam eder.

@@ -1,0 +1,32 @@
+services:
+  aksoy-tank-relay:
+    build: .
+    container_name: aksoy-tank-relay
+    restart: unless-stopped
+    environment:
+      AKSOY_TANK_RELAY_HOST: 0.0.0.0
+      AKSOY_TANK_RELAY_PORT: 8765
+      AKSOY_TANK_ALLOWED_PATHS: /aksoy-tank/ws
+    expose:
+      - "8765"
+    networks:
+      - atify-net
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,noexec,nosuid
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/aksoy-tank/health', timeout=2).read()"]
+      interval: 20s
+      timeout: 3s
+      retries: 3
+
+networks:
+  atify-net:
+    external: true
+    name: atify_atify-net

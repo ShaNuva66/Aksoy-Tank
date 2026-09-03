@@ -1,32 +1,35 @@
-# Play Store Guncelleme Notlari
+# Play Store Güncelleme Notları
 
 ## tr-TR
 
-Aksoy Tank 1.4.0:
+Aksoy Tank 2.0.0:
 
-- Android 16 / API 36 hedef destegi eklendi.
-- Bolumlere gercek dalga ilerlemesi ve dalga aralari eklendi.
-- Her 5. bolum, kendine ozgu ana bossun avlandigi goreve donusturuldu.
-- Cekirdeksiz taarruz ve komutan avlama gorevleriyle bolum cesitliligi artirildi.
-- Cekirdek tahkimati 7 vurus dayanacak sekilde guclendirildi.
-- Tanklarin birbirini firlatmasi ve blok araligindan mermi gecmesi duzeltildi.
-- Guvenli dusman dogma noktalari ve daha yumusak bolum dengesi eklendi.
-- Kalkan icin kalan sure cubugu eklendi.
-- Online co-op ve online VS oda modlari eklendi.
-- Android 7.0+ ile ARMv7/ARM64 destegi korundu.
+- Hızlı eşleşme veya oda koduyla çevrim içi co-op ve 1v1 modları açıldı.
+- Kısa bağlantı kesintilerinde otomatik yeniden bağlanma ve oda sahibi devri eklendi.
+- Tankların birbirine yapışması, üst üste binmesi ve temas anında fırlaması engellendi.
+- 60 bölümün harita düzenleri çeşitlendirildi; düşman çıkışları ve kalıcı geçiş yolları denetlendi.
+- Dalga ilerlemesi ve kalkan süresi sade oyun arayüzünde görünür hale getirildi.
+- Boss boyutu, canı, hitbox'ı ve hasarı boss türüne göre dengelendi.
+- Duvar aralıklarından hatalı ateş, çekirdeğin karşısında tehlikeli doğma ve geçilemeyen düzenler düzeltildi.
+- Hareket ve ateş gerektiren ilk oyun eğitimi eklendi.
+- Özgün müzik ve ses efektleri ile ses, titreşim, görsel efekt yoğunluğu ve hareketi azalt ayarları eklendi.
+- Android hedef API düzeyi 36'ya yükseltildi; Android 7.0 ve sonrası destekleniyor.
 
 ## en-US
 
-Aksoy Tank 1.4.0:
+Aksoy Tank 2.0.0:
 
-- Updated the game to target Android 16 / API 36.
-- Added true wave progression, wave breaks, and more varied mission types.
-- Added dedicated boss hunts, coreless assaults, and command hunts.
-- Strengthened core defenses and improved late-stage balance.
-- Fixed tank overlap launching, wall-seam shots, and unsafe enemy spawns.
-- Added a shield duration bar plus online co-op and online VS rooms.
-- Kept Android 7.0+ and ARMv7/ARM64 device support.
+- Added quick matchmaking and private room-code online co-op and 1v1 modes.
+- Added automatic reconnect and host migration for brief connection losses.
+- Prevented tanks from sticking, overlapping, or launching each other at close range.
+- Diversified all 60 stage layouts and audited spawn and permanent navigation routes.
+- Added compact wave progress and shield duration indicators.
+- Balanced boss size, health, hitbox, and damage by boss type.
+- Fixed firing through wall gaps, unsafe core-facing spawns, and blocked layouts.
+- Added an interactive first-play movement and firing tutorial.
+- Added original music and SFX plus audio, haptics, visual intensity, and reduced-motion settings.
+- Updated Android target API to 36 while retaining Android 7.0+ support.
 
-## Play Console Kisa Not
+## Play Console Kısa Not
 
-API 36 destegi, gercek dalgalar, boss avlari, yeni gorevler, 7 vurusluk cekirdek tahkimati, kalkan sure cubugu, online co-op/VS ve oynanis denge duzeltmeleri eklendi.
+Hızlı eşleşmeli online co-op/1v1, yeniden bağlanma, etkileşimli eğitim, erişilebilirlik ayarları, çeşitli haritalar ve yakın temas tank düzeltmeleri eklendi.

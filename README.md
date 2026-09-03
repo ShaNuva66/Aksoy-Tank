@@ -62,7 +62,7 @@ Kopyalanmayacaklar:
 - oynanabilir prototip arena
 - oyuncu tank hareketi ve atesi
 - 1P solo oyun modu
-- oda kodlu online 2P co-op ve VS altyapisi
+- hizli eslesmeli veya oda kodlu, internet uzerinden online co-op ve 1V1 modlari
 - 4 dusman arketipi: grunt, scout, brute, sniper
 - dusmanlardan dusen pickup sistemi: repair, shield, overdrive, turbo, fortify
 - stage bazli renk paleti ve atmosfer temalari
@@ -70,9 +70,10 @@ Kopyalanmayacaklar:
 - cekirdek savunma, dalga temizleme, komutan avi ve boss avi hedefleri
 - kazanma/kaybetme ekrani
 - mobil analog joystick ve ates kontrol katmani
+- etkilesimli ilk oyun egitimi ve azaltmis hareket/gorsel efekt ayarlari
 - sabit arena kamera yapisi ve cache'li dusman hedef secimi
 - mermi hareketinde normalize maliyetini azaltan hafif optimizasyonlar
-- `WebSocket` relay server uzerinden host-authoritative co-op ve VS eslesmesi
+- guvenli `WSS` relay uzerinden host-authoritative co-op ve 1V1 eslesmesi
 
 ## Kontroller
 
@@ -90,8 +91,8 @@ python -m pip install -r .\online-relay\requirements.txt
 python .\online-relay\server.py
 ```
 
-- Varsayilan baglanti adresi: `ws://127.0.0.1:8765/ws`
-- Gercek internet yayini icin bu relay'i VPS veya bulut uzerinde `wss://` ile yayinlamak ve menudeki sunucu adresini bu adrese ayarlamak gerekir.
+- Magaza baglanti adresi: `wss://atify.com.tr/aksoy-tank/ws`
+- Relay Docker'da ozel agda calisir; 8765 portu internete acilmaz ve TLS Caddy tarafindan sonlandirilir.
 
 ## Build ve Yayin
 

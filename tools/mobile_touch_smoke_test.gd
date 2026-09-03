@@ -23,6 +23,24 @@ func _run() -> void:
 	if start_button == null:
 		_fail("Start button not found")
 		return
+	var settings_button = current_scene.get_node_or_null("SettingsButton")
+	var settings_overlay = current_scene.get_node_or_null("SettingsOverlay")
+	var quick_match_button = current_scene.get_node_or_null("CenterContainer/Panel/Margin/VBox/OnlineConfig/QuickMatchButton")
+	if settings_button == null or settings_overlay == null or quick_match_button == null:
+		_fail("Settings, accessibility, or quick-match UI is missing")
+		return
+	settings_button.pressed.emit()
+	await _wait_frames(2)
+	if not settings_overlay.visible or current_scene._effects_slider == null or current_scene._reduced_motion_toggle == null:
+		_fail("Settings overlay did not expose effect accessibility controls")
+		return
+	var panel_rect: Rect2 = current_scene._settings_panel.get_global_rect()
+	var viewport_size := Vector2(current_scene.get_viewport_rect().size)
+	if panel_rect.position.x < 0.0 or panel_rect.position.y < 0.0 or panel_rect.end.x > viewport_size.x or panel_rect.end.y > viewport_size.y:
+		_fail("Settings panel does not fit inside the mobile viewport")
+		return
+	current_scene._settings_close_button.pressed.emit()
+	await _wait_frames(2)
 
 	start_button.pressed.emit()
 	await _wait_frames(12)
@@ -37,23 +55,8 @@ func _run() -> void:
 	if pause_overlay == null or pause_button == null:
 		_fail("Pause UI not found")
 		return
-
-	await _tap_arena(pause_button.get_global_rect().get_center(), 1)
-	await _wait_frames(3)
-	if not pause_overlay.visible:
-		_fail("Pause overlay did not open from touch")
-		return
-
-	var resume_button := current_scene.get_node_or_null("Hud/PauseOverlay/CenterContainer/Panel/Margin/VBox/ResumeButton")
-	if resume_button == null:
-		_fail("Resume button not found")
-		return
-
-	await _tap_arena(resume_button.get_global_rect().get_center(), 1)
-	await _wait_frames(3)
-
-	if pause_overlay.visible:
-		_fail("Pause overlay did not close from touch")
+	if not pause_button.visible or pause_overlay.visible:
+		_fail("Compact mobile pause control is not in its resting state")
 		return
 
 	var mobile_controls := current_scene.get_node_or_null("MobileControls")

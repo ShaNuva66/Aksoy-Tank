@@ -1,6 +1,8 @@
 extends Control
 
 var _flash_time := 0.0
+var _intensity := 1.0
+var _reduced_motion := false
 
 
 func _ready() -> void:
@@ -10,8 +12,15 @@ func _ready() -> void:
 
 
 func flash() -> void:
-	_flash_time = 0.48
+	if _intensity <= 0.01:
+		return
+	_flash_time = 0.2 if _reduced_motion else 0.48
 	queue_redraw()
+
+
+func configure(intensity: float, reduced_motion: bool) -> void:
+	_intensity = clampf(intensity, 0.0, 1.0)
+	_reduced_motion = reduced_motion
 
 
 func _process(delta: float) -> void:
@@ -26,7 +35,7 @@ func _draw() -> void:
 	if _flash_time <= 0.0:
 		return
 
-	var strength := clampf(_flash_time / 0.48, 0.0, 1.0)
+	var strength := clampf(_flash_time / (0.2 if _reduced_motion else 0.48), 0.0, 1.0) * _intensity
 	var red := Color("#ff3f4f")
 	red.a = 0.08 + strength * 0.18
 	var edge := 16.0 + strength * 18.0
