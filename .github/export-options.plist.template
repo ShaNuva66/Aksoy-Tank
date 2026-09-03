@@ -7,9 +7,16 @@
   <key>destination</key>
   <string>export</string>
   <key>signingStyle</key>
-  <string>automatic</string>
+  <string>manual</string>
+  <key>signingCertificate</key>
+  <string>Apple Distribution</string>
   <key>teamID</key>
   <string>__APPLE_TEAM_ID__</string>
+  <key>provisioningProfiles</key>
+  <dict>
+    <key>com.atalay.aksoytanks</key>
+    <string>__IOS_PROFILE_NAME__</string>
+  </dict>
   <key>manageAppVersionAndBuildNumber</key>
   <false/>
   <key>uploadSymbols</key>
