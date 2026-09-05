@@ -7,6 +7,7 @@ var promoted := false
 var rejoined := false
 var failed := false
 var remote_shots := 0
+var room_code := "INTEG42"
 
 
 func _init() -> void:
@@ -17,6 +18,8 @@ func _init() -> void:
 			mode = arg.trim_prefix("--mode=")
 		elif arg.begins_with("--server="):
 			server = arg.trim_prefix("--server=")
+		elif arg.begins_with("--room="):
+			room_code = arg.trim_prefix("--room=")
 	call_deferred("run")
 
 
@@ -29,7 +32,7 @@ func run() -> void:
 	net.room_joined.connect(func(room, role, slot):
 		rejoined = true
 		print("JOIN: ", room, " ", role, " ", slot, " at=", Time.get_unix_time_from_system()))
-	net.connect_to_room(server, "INTEG42", mode)
+	net.connect_to_room(server, room_code, mode)
 	var deadline := Time.get_ticks_msec() + 15000
 	while not net.is_peer_connected() and Time.get_ticks_msec() < deadline:
 		await process_frame
@@ -37,6 +40,8 @@ func run() -> void:
 		push_error("Integration pairing timeout")
 		quit(1)
 		return
+	# Internet connection ordering need not match process launch ordering.
+	leader = net.is_host()
 	session.session_mode = mode
 	session.selected_stage_index = 2 if leader else 8
 	var arena = load("res://src/scenes/prototype_arena.tscn").instantiate()
