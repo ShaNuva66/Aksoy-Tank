@@ -173,6 +173,8 @@ async def remove_peer(connection: ServerConnection) -> None:
             if connection not in peers:
                 continue
             removed_peer = peers.pop(connection)
+            for remaining_peer in peers.values():
+                remaining_peer.rematch_ready = False
             changed_room = room_code
             if removed_peer.role == "host" and peers:
                 promoted_peer = min(peers.values(), key=lambda item: item.slot)
@@ -268,6 +270,7 @@ async def join_room(
             "slot": slot,
             "mode": mode,
             "player_count": player_count,
+            "round_id": ROOM_ROUNDS.get(room_code, 0),
             "profiles": room_profiles(room_code),
         },
     )

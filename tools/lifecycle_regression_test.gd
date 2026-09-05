@@ -47,6 +47,16 @@ func run() -> void:
 		arena._notification(Node.NOTIFICATION_APPLICATION_PAUSED)
 		require(not paused and arena.pause_overlay.visible, "Online background must preserve network processing")
 		arena._on_pause_resume_button_pressed()
+		arena._update_wait_state(true)
+		require(not player.can_process() and not paused, "Waiting must freeze tanks without pausing networking")
+		arena._update_wait_state(false)
+		require(player.can_process(), "Reconnection did not restore tank simulation")
+		arena._match_over = true
+		arena._status_text = "Zafer"
+		arena._update_wait_state(true)
+		arena._update_wait_state(false)
+		require(arena._status_text == "Zafer", "Disconnect overwrote the completed result")
+		arena._match_over = false
 	arena._session_mode = "solo"
 	arena.queue_free()
 	await process_frame

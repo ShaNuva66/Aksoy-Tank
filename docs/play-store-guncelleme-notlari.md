@@ -2,7 +2,14 @@
 
 ## tr-TR
 
-Aksoy Tank 2.0.1:
+Aksoy Tank 2.0.2:
+
+- Co-op sonraki bölüm ve tekrar deneme iki oyuncunun onayıyla birlikte başlar.
+- Host bölümü misafire eşitlenir; eski raund paketleri yeni maça uygulanmaz.
+- Oda kodu ve bağlantı durumu görünür; bağlantı beklerken saha donar.
+- Eski ateş/hareket komutları, duvar eşitleme ve yeniden katılma sorunları giderildi.
+
+Önceki sürümlerden korunan iyileştirmeler:
 
 - Online maç menüsü, Android geri düğmesi ve arka plana geçiş davranışı düzeltildi.
 - Host devri sırasında nesne kimlikleri, duvar sürümü ve bekleyen dalga durumu korunur.
@@ -22,7 +29,14 @@ Aksoy Tank 2.0.1:
 
 ## en-US
 
-Aksoy Tank 2.0.1:
+Aksoy Tank 2.0.2:
+
+- Synchronized co-op stage progression, retries and versus rematches.
+- Host stage synchronization and rejection of stale round snapshots.
+- Visible room and connection state; simulation waits for the other player.
+- Fixed stale inputs, wall state retention and rejoining completed matches.
+
+Improvements retained from previous releases:
 
 - Added quick matchmaking and private room-code online co-op and 1v1 modes.
 - Added automatic reconnect and host migration for brief connection losses.

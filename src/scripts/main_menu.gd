@@ -436,6 +436,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _on_start_button_pressed() -> void:
+	if start_button.disabled:
+		return
 	if GameSession.is_online_mode():
 		if GameSession.get_player_name().length() < 3:
 			online_status_label.text = "Oyuncu adı en az 3 karakter olmalı."
@@ -453,6 +455,8 @@ func _on_start_button_pressed() -> void:
 
 
 func _on_quick_match_pressed() -> void:
+	if _quick_match_button.disabled or not GameSession.is_online_mode():
+		return
 	if GameSession.get_player_name().length() < 3:
 		online_status_label.text = "Oyuncu adı en az 3 karakter olmalı."
 		player_name_edit.grab_focus()
@@ -474,11 +478,15 @@ func _on_next_stage_button_pressed() -> void:
 
 
 func _on_previous_mode_button_pressed() -> void:
+	if NetSession.get_status() != NetSession.STATUS_DISCONNECTED:
+		NetSession.disconnect_session()
 	GameSession.shift_session_mode(-1)
 	_refresh_stage_info()
 
 
 func _on_next_mode_button_pressed() -> void:
+	if NetSession.get_status() != NetSession.STATUS_DISCONNECTED:
+		NetSession.disconnect_session()
 	GameSession.shift_session_mode(1)
 	_refresh_stage_info()
 
@@ -554,7 +562,7 @@ func _refresh_stage_info() -> void:
 		tank_preview.set_profile(GameSession.get_network_profile())
 	server_url_edit.text = GameSession.get_server_url()
 	online_config.visible = GameSession.is_online_mode()
-	stage_row.visible = not GameSession.is_online_mode()
+	stage_row.visible = not GameSession.is_online_vs()
 	reset_progress_button.visible = not GameSession.is_online_mode()
 	previous_stage_button.disabled = stage["index"] <= 0
 	next_stage_button.disabled = stage["index"] >= unlocked_count - 1

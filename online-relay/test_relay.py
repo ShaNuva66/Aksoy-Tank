@@ -249,6 +249,26 @@ class RelayIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(joined["slot"], 1)
         self.assertEqual(sorted(peer.role for peer in server.ROOMS["LEAVE1"].values()), ["guest", "host"])
 
+    async def test_round_metadata_and_departure_clear_votes(self):
+        host = await self.open()
+        guest = await self.open()
+        await join(host, "ROUND1", mode="online_coop")
+        await join(guest, "ROUND1", mode="online_coop")
+        peers = list(server.ROOMS["ROUND1"].values())
+        await server.handle_rematch_vote(peers[0], True)
+        await server.handle_rematch_vote(peers[1], True)
+        self.assertEqual(server.ROOM_ROUNDS["ROUND1"], 1)
+        await server.handle_rematch_vote(peers[0], True)
+        await guest.close()
+        for _ in range(100):
+            if len(server.ROOMS["ROUND1"]) == 1:
+                break
+            await asyncio.sleep(0.01)
+        self.assertFalse(next(iter(server.ROOMS["ROUND1"].values())).rematch_ready)
+        replacement = await self.open()
+        joined = await join(replacement, "ROUND1", mode="online_coop")
+        self.assertEqual(joined["round_id"], 1)
+
     async def test_health_and_privacy_pages(self):
         def fetch(path):
             with urllib.request.urlopen(self.http_base + path, timeout=2) as response:

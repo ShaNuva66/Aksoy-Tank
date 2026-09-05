@@ -17,6 +17,7 @@ const STATUS_ERROR := "error"
 const CONNECTION_TIMEOUT_SECONDS := 12.0
 const PING_INTERVAL_SECONDS := 1.0
 const RECONNECT_DELAYS := [1.0, 2.0, 4.0]
+const INPUT_TIMEOUT_MS := 500
 
 var _socket: WebSocketPeer = null
 var _status := STATUS_DISCONNECTED
@@ -31,6 +32,9 @@ var _player_count := 1
 var _peer_connected := false
 var _latest_snapshot: Dictionary = {}
 var _remote_inputs := {}
+var _remote_input_times := {}
+var _ever_paired := false
+var _round_id := 0
 var _connection_elapsed := 0.0
 var _ping_elapsed := 0.0
 var _latency_ms := -1.0
@@ -226,7 +230,7 @@ func get_latest_snapshot() -> Dictionary:
 
 
 func get_remote_input(slot: int) -> Dictionary:
-	if _remote_inputs.has(slot):
+	if _peer_connected and _remote_inputs.has(slot) and Time.get_ticks_msec() - int(_remote_input_times.get(slot, 0)) <= INPUT_TIMEOUT_MS:
 		return Dictionary(_remote_inputs[slot].duplicate(true))
 
 	return {
@@ -250,6 +254,7 @@ func get_player_profile(slot: int) -> Dictionary:
 func clear_match_buffers() -> void:
 	_latest_snapshot.clear()
 	_remote_inputs.clear()
+	_remote_input_times.clear()
 
 
 func send_input(input_state: Dictionary) -> void:
@@ -297,9 +302,11 @@ func _handle_message(payload_text: String) -> void:
 				_fail_connection("Sunucu yaniti gecersiz.")
 				return
 			_player_count = int(message.get("player_count", 1))
+			_round_id = maxi(0, int(message.get("round_id", 0)))
 			_pending_room_code = String(message.get("room_code", _pending_room_code))
 			_matchmaking = false
 			_peer_connected = _player_count > 1
+			_ever_paired = _ever_paired or _peer_connected
 			_joined_once = true
 			_reconnect_attempt = 0
 			_apply_profiles(Array(message.get("profiles", [])))
@@ -316,17 +323,36 @@ func _handle_message(payload_text: String) -> void:
 		"peer_status":
 			_player_count = int(message.get("player_count", 1))
 			_peer_connected = bool(message.get("connected", false))
+			_ever_paired = _ever_paired or _peer_connected
+			if not _peer_connected:
+				_remote_inputs.clear()
+				_remote_input_times.clear()
 			_apply_profiles(Array(message.get("profiles", [])))
 			var status_text := "Es oyuncu baglandi." if _peer_connected else "Es oyuncu bekleniyor."
 			_set_status(_status, status_text)
 			peer_status_changed.emit(_peer_connected, _player_count)
 		"snapshot":
-			_latest_snapshot = Dictionary(message.get("payload", {}).duplicate(true))
+			var incoming := Dictionary(message.get("payload", {}).duplicate(true))
+			var incoming_round := int(Dictionary(incoming.get("meta", {})).get("round_id", 0))
+			if incoming_round < _round_id:
+				return
+			if incoming_round > _round_id:
+				clear_match_buffers()
+				_round_id = incoming_round
+			# Preserve the last complete wall state across delta-only packets.
+			if not bool(incoming.get("walls_changed", false)) and _latest_snapshot.has("walls"):
+				incoming["walls"] = _latest_snapshot["walls"]
+				incoming["walls_changed"] = bool(_latest_snapshot.get("walls_changed", false))
+			_latest_snapshot = incoming
 			snapshot_updated.emit()
 		"input":
 			var from_slot := int(message.get("from_slot", 2))
 			_remote_inputs[from_slot] = Dictionary(message.get("payload", {}).duplicate(true))
+			_remote_input_times[from_slot] = Time.get_ticks_msec()
 		"rematch_status":
+			if bool(message.get("start", false)):
+				_round_id = maxi(_round_id, int(message.get("round_id", 0)))
+				clear_match_buffers()
 			var ready_slots := Array(message.get("ready_slots", [])).duplicate()
 			var valid_slots: Array = []
 			for slot_value in ready_slots:
@@ -369,6 +395,9 @@ func _reset_connection_state() -> void:
 	_peer_connected = false
 	_latest_snapshot.clear()
 	_remote_inputs.clear()
+	_remote_input_times.clear()
+	_ever_paired = false
+	_round_id = 0
 	_connection_elapsed = 0.0
 	_ping_elapsed = 0.0
 	_latency_ms = -1.0
@@ -385,7 +414,7 @@ func _reset_connection_state() -> void:
 
 
 func _handle_transport_failure(message: String) -> void:
-	if _joined_via_matchmaking and not _peer_connected:
+	if _joined_via_matchmaking and not _ever_paired:
 		_matchmaking = true
 		_pending_room_code = ""
 	if _socket:
@@ -396,6 +425,8 @@ func _handle_transport_failure(message: String) -> void:
 	_connection_elapsed = 0.0
 	_ping_elapsed = 0.0
 	_peer_connected = false
+	_remote_inputs.clear()
+	_remote_input_times.clear()
 	if _reconnect_enabled and _reconnect_attempt < RECONNECT_DELAYS.size():
 		_reconnect_wait = float(RECONNECT_DELAYS[_reconnect_attempt])
 		_reconnect_attempt += 1

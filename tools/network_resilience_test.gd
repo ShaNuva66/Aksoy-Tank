@@ -42,6 +42,25 @@ func _run() -> void:
 	_require(net_session._matchmaking and net_session._pending_room_code.is_empty(), "Waiting player did not return to matchmaking")
 
 	net_session.disconnect_session(false)
+	net_session._peer_connected = true
+	net_session._handle_message(JSON.stringify({"type": "input", "from_slot": 2, "payload": {"fire": true, "drive": 1.0}}))
+	_require(bool(net_session.get_remote_input(2).get("fire", false)), "Fresh input was lost")
+	net_session._remote_input_times[2] = Time.get_ticks_msec() - 1000
+	_require(not bool(net_session.get_remote_input(2).get("fire", false)), "Stale fire remained held")
+	net_session._round_id = 2
+	net_session._handle_message(JSON.stringify({"type": "snapshot", "payload": {"meta": {"round_id": 1}}}))
+	_require(net_session.get_latest_snapshot().is_empty(), "Old round snapshot was accepted")
+	net_session._handle_message(JSON.stringify({"type": "snapshot", "payload": {"meta": {"round_id": 2}, "walls_changed": true, "walls": [{"name": "Wall_1_1"}], "walls_revision": 4}}))
+	net_session._handle_message(JSON.stringify({"type": "snapshot", "payload": {"meta": {"round_id": 2}, "walls_changed": false, "walls": [], "walls_revision": 4}}))
+	_require(net_session.get_latest_snapshot().get("walls", []).size() == 1, "Wall state disappeared between physics ticks")
+	net_session._joined_via_matchmaking = true
+	net_session._ever_paired = true
+	net_session._peer_connected = false
+	net_session._pending_room_code = "PAIRED1"
+	net_session._reconnect_enabled = true
+	net_session._handle_transport_failure("Test")
+	_require(not net_session._matchmaking and net_session._pending_room_code == "PAIRED1", "Established match returned to public queue")
+	net_session.disconnect_session(false)
 	if _failed:
 		print("NETWORK_RESILIENCE: FAIL")
 		quit(1)

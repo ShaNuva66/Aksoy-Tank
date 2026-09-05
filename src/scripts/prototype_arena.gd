@@ -160,6 +160,8 @@ var _vs_center_timer := VS_CENTER_FIRST_DELAY
 var _vs_center_wave := 0
 var _rematch_ready_slots: Dictionary = {}
 var _rematch_transition_started := false
+var _stage_sync_pending := false
+var _waiting_entity_modes: Dictionary = {}
 var _hit_event_sequence := 0
 var _last_hit_event: Dictionary = {}
 var _hit_event_lifetime := 0.0
@@ -181,6 +183,11 @@ func _ready() -> void:
 	_local_player_slot = 1 if not _is_online_mode() else NetSession.get_local_slot()
 	_local_control_count = 1
 	_stage_data = GameSession.get_selected_stage()
+	if _is_online_mode() and not _is_authority():
+		var latest_meta: Dictionary = NetSession.get_latest_snapshot().get("meta", {})
+		var host_stage := clampi(int(latest_meta.get("stage_index", GameSession.selected_stage_index)), 0, GameSession.get_stage_count() - 1)
+		GameSession.selected_stage_index = host_stage
+		_stage_data = GameSession.get_selected_stage()
 	_theme_palette = STAGE_CATALOG.get_theme(_stage_data.get("theme", "dust"))
 	_combat_balance = _build_combat_balance()
 	_player_spawn_cells = _build_player_spawn_cells()
@@ -213,6 +220,7 @@ func _ready() -> void:
 
 	if _is_online_mode() and not _capture_requested:
 		NetSession.peer_status_changed.connect(_on_online_peer_status_changed)
+		NetSession.status_changed.connect(_on_online_connection_status)
 		NetSession.snapshot_updated.connect(_on_online_snapshot_updated)
 		NetSession.profiles_updated.connect(_on_online_profiles_updated)
 		NetSession.rematch_status_updated.connect(_on_online_rematch_status_updated)
@@ -223,6 +231,7 @@ func _ready() -> void:
 				spawn_timer.start(_scaled_spawn_delay(1.0))
 		else:
 			spawn_timer.stop()
+			_on_online_snapshot_updated()
 			_show_alert("Online oda baglandi. Host snapshot bekleniyor.", _get_theme_color("hud_accent", Color("#f2d48f")))
 	else:
 		if not _is_vs_mode() and not _onboarding_active:
@@ -239,6 +248,8 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	get_tree().quit_on_go_back = _previous_quit_on_go_back
 	if _is_online_mode():
+		if NetSession.status_changed.is_connected(_on_online_connection_status):
+			NetSession.status_changed.disconnect(_on_online_connection_status)
 		if NetSession.peer_status_changed.is_connected(_on_online_peer_status_changed):
 			NetSession.peer_status_changed.disconnect(_on_online_peer_status_changed)
 		if NetSession.snapshot_updated.is_connected(_on_online_snapshot_updated):
@@ -277,10 +288,12 @@ func _process(delta: float) -> void:
 
 func _physics_process(delta: float) -> void:
 	_hit_event_lifetime = maxf(_hit_event_lifetime - delta, 0.0)
-	if _capture_requested or not _is_online_mode() or _match_over:
+	if _capture_requested or not _is_online_mode() or _stage_sync_pending:
 		return
 
 	if _is_authority():
+		if _match_over:
+			return
 		_apply_remote_player_input()
 		if _waiting_for_peer or not NetSession.is_peer_connected():
 			return
@@ -295,6 +308,8 @@ func _physics_process(delta: float) -> void:
 	if not _pending_network_snapshot.is_empty():
 		_apply_world_snapshot(_pending_network_snapshot)
 		_pending_network_snapshot.clear()
+	if _match_over or _waiting_for_peer:
+		return
 
 	var local_player = _get_local_player()
 	if local_player == null:
@@ -313,7 +328,7 @@ func _input(event: InputEvent) -> void:
 			if next_stage_button.visible and next_stage_button.get_global_rect().has_point(touch_position):
 				_go_to_next_stage()
 				return
-			if retry_button.get_global_rect().has_point(touch_position):
+			if retry_button.visible and retry_button.get_global_rect().has_point(touch_position):
 				_on_retry_requested()
 				return
 			if menu_button.get_global_rect().has_point(touch_position):
@@ -497,7 +512,10 @@ func _install_game_feel_ui() -> void:
 	header.visible = true
 	shield_backdrop.visible = false
 	shield_hud.visible = false
-	info_label.visible = false
+	info_label.visible = _is_online_mode()
+	info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info_label.add_theme_font_size_override("font_size", 16)
 	brief_label.visible = false
 	status_label.visible = false
 	stats_label.visible = false
@@ -881,6 +899,8 @@ func _finish_match(player_won: bool, title: String, subtitle: String) -> void:
 	status_label.text = "Durum: " + _status_text
 	result_overlay.visible = true
 	next_stage_button.visible = local_won and not _is_vs_mode() and GameSession.has_next_stage()
+	if _is_online_mode() and not _is_vs_mode():
+		retry_button.visible = not next_stage_button.visible
 	_refresh_pause_button_visibility()
 	_stop_match_entities()
 	_play_result_presentation(local_won, _result_is_draw)
@@ -1032,8 +1052,14 @@ func _update_hud() -> void:
 func _update_network_info_label() -> void:
 	var network_suffix := ""
 	if _is_online_mode():
-		network_suffix = " | %s" % NetSession.get_network_quality_text()
+		network_suffix = " | ODA %s | %s" % [GameSession.get_room_code(), NetSession.get_network_quality_text()]
+		if not NetSession.is_online_active():
+			network_suffix = " | " + NetSession.get_status_message()
+		elif _waiting_for_peer:
+			network_suffix = " | ODA %s | OYUNCU BEKLENIYOR" % GameSession.get_room_code()
 	info_label.text = "S%02d | %s | %s%s" % [_stage_data.get("number", 1), _stage_data.get("name", "Arena"), _get_mode_label(), network_suffix]
+	if _is_online_mode():
+		info_label.text = network_suffix.trim_prefix(" | ")
 
 
 func _update_shield_hud(delta: float) -> void:
@@ -1053,7 +1079,7 @@ func _update_shield_hud(delta: float) -> void:
 func _on_retry_requested() -> void:
 	if retry_button.disabled or _rematch_transition_started:
 		return
-	if not (_is_online_mode() and _is_vs_mode()):
+	if not _is_online_mode():
 		_restart_level()
 		return
 	if not _match_over:
@@ -1069,7 +1095,7 @@ func _on_retry_requested() -> void:
 
 
 func _on_online_rematch_status_updated(ready_slots: Array, start: bool, _round_id: int) -> void:
-	if not (_is_vs_mode() and _match_over) or _rematch_transition_started:
+	if not (_is_online_mode() and _match_over) or _rematch_transition_started:
 		return
 	_rematch_ready_slots.clear()
 	for slot_value in ready_slots:
@@ -1082,7 +1108,13 @@ func _on_online_rematch_status_updated(ready_slots: Array, start: bool, _round_i
 
 
 func _update_rematch_ui() -> void:
-	if not (_is_vs_mode() and _match_over):
+	if not (_is_online_mode() and _match_over):
+		return
+	if not _is_vs_mode():
+		var local_ready := _rematch_ready_slots.has(_local_player_slot)
+		retry_button.disabled = local_ready
+		next_stage_button.disabled = local_ready
+		result_subtitle.text = "Devam onayi %d/2" % _rematch_ready_slots.size()
 		return
 	var ready_count := _rematch_ready_slots.size()
 	var local_ready := _rematch_ready_slots.has(_local_player_slot)
@@ -1110,6 +1142,8 @@ func _begin_synchronized_rematch() -> void:
 	retry_button.text = "RAUND BAŞLIYOR"
 	result_subtitle.text = "Rövanş onayı 2/2 • Yeni raund başlıyor..."
 	NetSession.clear_match_buffers()
+	if not _is_vs_mode() and next_stage_button.visible:
+		GameSession.selected_stage_index = mini(int(_stage_data.get("index", 0)) + 1, GameSession.get_stage_count() - 1)
 	call_deferred("_change_to_arena")
 
 
@@ -1124,6 +1158,9 @@ func _restart_level() -> void:
 
 
 func _go_to_next_stage() -> void:
+	if _is_online_mode():
+		_on_retry_requested()
+		return
 	if _paused:
 		_set_pause_state(false)
 	if GameSession.advance_to_next_stage():
@@ -1830,6 +1867,20 @@ func _claim_network_id() -> int:
 
 func _update_wait_state(waiting: bool) -> void:
 	_waiting_for_peer = waiting
+	if _is_online_mode():
+		# Freeze simulation, not the tree: networking and the leave menu stay active.
+		for group in ["tanks", "bullets", "pickups"]:
+			for entity in get_tree().get_nodes_in_group(group):
+				if waiting and not _waiting_entity_modes.has(entity):
+					_waiting_entity_modes[entity] = entity.process_mode
+					entity.process_mode = Node.PROCESS_MODE_DISABLED
+		if not waiting:
+			for entity in _waiting_entity_modes:
+				if is_instance_valid(entity):
+					entity.process_mode = _waiting_entity_modes[entity]
+			_waiting_entity_modes.clear()
+	if _match_over:
+		return
 	if waiting and _is_online_mode():
 		_status_text = "Rakip bekleniyor" if _is_vs_mode() else "Es oyuncu bekleniyor"
 		spawn_timer.stop()
@@ -1856,14 +1907,30 @@ func _on_online_peer_status_changed(connected: bool, _count: int) -> void:
 	if connected:
 		if _is_authority():
 			_last_sent_wall_revision = -1
+			call_deferred("_send_full_online_state")
 		var connected_text := "Rakip baglandi. Duello basliyor." if _is_vs_mode() else "Es oyuncu baglandi. Operasyon basliyor."
 		_show_alert(connected_text, _get_theme_color("hud_accent", Color("#f2d48f")))
 		if _is_authority() and spawn_timer.is_stopped() and not _match_over and not _is_vs_mode():
 			spawn_timer.start(_scaled_spawn_delay(1.0))
 	else:
+		_rematch_ready_slots.clear()
+		retry_button.disabled = false
+		next_stage_button.disabled = false
 		_show_alert("Baglanti kesildi. Oda es oyuncuyu bekliyor.", Color("#ffb584"))
 
 	_update_hud()
+
+
+func _on_online_connection_status(state: String, _message: String) -> void:
+	if state != NetSession.STATUS_CONNECTED:
+		_update_wait_state(true)
+	_update_network_info_label()
+
+
+func _send_full_online_state() -> void:
+	if _is_authority() and NetSession.is_peer_connected():
+		_last_sent_wall_revision = -1
+		NetSession.send_snapshot(_build_world_snapshot())
 
 
 func _on_online_room_joined(_room_code: String, role: String, slot: int) -> void:
@@ -1925,6 +1992,14 @@ func _on_online_snapshot_updated() -> void:
 	var snapshot := NetSession.get_latest_snapshot()
 	if snapshot.is_empty():
 		return
+	var meta: Dictionary = snapshot.get("meta", {})
+	var host_stage := clampi(int(meta.get("stage_index", _stage_data.get("index", 0))), 0, GameSession.get_stage_count() - 1)
+	if host_stage != int(_stage_data.get("index", 0)):
+		if not _stage_sync_pending:
+			_stage_sync_pending = true
+			GameSession.selected_stage_index = host_stage
+			call_deferred("_change_to_arena")
+		return
 
 	# Network packets arrive during the idle loop. Keep only the newest snapshot
 	# and apply it on the next physics tick to avoid mixed-clock transform jitter.
@@ -1945,6 +2020,8 @@ func _build_world_snapshot() -> Dictionary:
 		"walls_changed": walls_changed,
 		"walls_revision": _wall_revision,
 		"meta": {
+			"round_id": NetSession._round_id if _is_online_mode() else 0,
+			"stage_index": int(_stage_data.get("index", 0)),
 			"hit_event": _last_hit_event.duplicate(true) if _hit_event_lifetime > 0.0 else {},
 			"spawned": _spawned_enemies,
 			"alive": _alive_enemies,
@@ -2037,9 +2114,12 @@ func _apply_player_snapshot(players: Array) -> void:
 		var alive := bool(player_state.get("alive", true))
 
 		if not alive:
-			if is_instance_valid(player_node) and slot != _local_player_slot:
+			if is_instance_valid(player_node):
 				player_node.queue_free()
 				_players_by_slot.erase(slot)
+				if slot == _local_player_slot and mobile_controls:
+					mobile_controls.set_controls_enabled(false)
+					_show_alert("Tankin devre disi. Takim arkadasin devam ediyor.", Color("#f2d48f"))
 			continue
 
 		if not is_instance_valid(player_node):
@@ -2181,6 +2261,10 @@ func _apply_meta_snapshot(meta: Dictionary) -> void:
 			result_subtitle.text = String(meta.get("result_subtitle", result_subtitle.text))
 			local_won = _status_text == "Zafer"
 		next_stage_button.visible = bool(meta.get("next_stage_visible", false))
+		if not _is_vs_mode():
+			retry_button.visible = not next_stage_button.visible
+			if local_won and not was_match_over:
+				GameSession.mark_stage_completed(int(_stage_data.get("index", 0)))
 		result_overlay.visible = true
 		_stop_match_entities()
 		if not was_match_over or not _result_animation_played:

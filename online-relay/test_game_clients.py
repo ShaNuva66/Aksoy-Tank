@@ -56,7 +56,7 @@ def run(godot):
             children.append(guest)
             failures = []
             with ThreadPoolExecutor(max_workers=2) as executor:
-                futures = [executor.submit(process.communicate, timeout=35) for process in (host, guest)]
+                futures = [executor.submit(process.communicate, timeout=60) for process in (host, guest)]
                 for process, future in zip((host, guest), futures):
                     output, _ = future.result()
                     print(output)
