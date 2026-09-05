@@ -61,6 +61,26 @@ func _run() -> void:
 	net_session._handle_transport_failure("Test")
 	_require(not net_session._matchmaking and net_session._pending_room_code == "PAIRED1", "Established match returned to public queue")
 	net_session.disconnect_session(false)
+	var events: Array[String] = []
+	var on_snapshot := func(): events.append("snapshot")
+	var on_authority := func(_role, _slot): events.append("authority")
+	net_session.snapshot_updated.connect(on_snapshot)
+	net_session.authority_changed.connect(on_authority)
+	net_session._polling_packets = true
+	for i in range(10):
+		net_session._handle_message(JSON.stringify({"type": "snapshot", "payload": {"meta": {"round_id": 0}, "walls": [], "enemies": []}}))
+	_require(events.is_empty(), "Packet burst emitted redundant world updates")
+	net_session._handle_message(JSON.stringify({"type": "authority_changed", "role": "host", "slot": 1}))
+	_require(events == ["snapshot", "authority"], "Promotion did not observe the final buffered snapshot first")
+	net_session._polling_packets = false
+	net_session._flush_snapshot_notification()
+	_require(events.size() == 2, "Buffered snapshot emitted twice")
+	for invalid in [42, [], "bad", {"meta": []}, {"meta": {}, "players": [42]}]:
+		net_session._handle_message(JSON.stringify({"type": "snapshot", "payload": invalid}))
+	_require(events.size() == 2, "Malformed snapshot was forwarded to the arena")
+	net_session.snapshot_updated.disconnect(on_snapshot)
+	net_session.authority_changed.disconnect(on_authority)
+	net_session.disconnect_session(false)
 	if _failed:
 		print("NETWORK_RESILIENCE: FAIL")
 		quit(1)

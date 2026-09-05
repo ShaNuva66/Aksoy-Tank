@@ -18,6 +18,8 @@ const CONNECTION_TIMEOUT_SECONDS := 12.0
 const PING_INTERVAL_SECONDS := 1.0
 const RECONNECT_DELAYS := [1.0, 2.0, 4.0]
 const INPUT_TIMEOUT_MS := 500
+const PACKET_POLL_BUDGET_US := 3000
+const MAX_PACKETS_PER_FRAME := 64
 
 var _socket: WebSocketPeer = null
 var _status := STATUS_DISCONNECTED
@@ -35,6 +37,8 @@ var _remote_inputs := {}
 var _remote_input_times := {}
 var _ever_paired := false
 var _round_id := 0
+var _polling_packets := false
+var _snapshot_notification_pending := false
 var _connection_elapsed := 0.0
 var _ping_elapsed := 0.0
 var _latency_ms := -1.0
@@ -86,11 +90,21 @@ func _process(delta: float) -> void:
 			if not _matchmaking:
 				join_payload["room_code"] = _pending_room_code
 			_send_json(join_payload)
+			if _socket == null:
+				return
 			_set_status(STATUS_JOINING, "Eslesme araniyor..." if _matchmaking else "Odaya katiliniyor...")
 
+		var poll_started := Time.get_ticks_usec()
+		var packets_read := 0
+		_polling_packets = true
 		while _socket != null and _socket.get_available_packet_count() > 0:
 			var payload_text := _socket.get_packet().get_string_from_utf8()
 			_handle_message(payload_text)
+			packets_read += 1
+			if packets_read >= MAX_PACKETS_PER_FRAME or Time.get_ticks_usec() - poll_started >= PACKET_POLL_BUDGET_US:
+				break
+		_polling_packets = false
+		_flush_snapshot_notification()
 
 		if _socket != null and _status == STATUS_CONNECTED:
 			_ping_elapsed += delta
@@ -252,6 +266,7 @@ func get_player_profile(slot: int) -> Dictionary:
 
 
 func clear_match_buffers() -> void:
+	_snapshot_notification_pending = false
 	_latest_snapshot.clear()
 	_remote_inputs.clear()
 	_remote_input_times.clear()
@@ -293,6 +308,9 @@ func _handle_message(payload_text: String) -> void:
 		return
 
 	var message: Dictionary = parsed
+	# Control messages must observe the preceding world state before changing roles.
+	if String(message.get("type", "")) not in ["snapshot", "input", "pong"]:
+		_flush_snapshot_notification()
 	match String(message.get("type", "")):
 		"room_joined":
 			_joined_via_matchmaking = _joined_via_matchmaking or _matchmaking
@@ -332,7 +350,17 @@ func _handle_message(payload_text: String) -> void:
 			_set_status(_status, status_text)
 			peer_status_changed.emit(_peer_connected, _player_count)
 		"snapshot":
-			var incoming := Dictionary(message.get("payload", {}).duplicate(true))
+			if not message.get("payload") is Dictionary:
+				return
+			var incoming: Dictionary = message["payload"]
+			if not incoming.get("meta", {}) is Dictionary:
+				return
+			for field in ["players", "enemies", "bullets", "pickups", "walls"]:
+				if not incoming.get(field, []) is Array:
+					return
+				for entry in incoming.get(field, []):
+					if not entry is Dictionary:
+						return
 			var incoming_round := int(Dictionary(incoming.get("meta", {})).get("round_id", 0))
 			if incoming_round < _round_id:
 				return
@@ -344,8 +372,12 @@ func _handle_message(payload_text: String) -> void:
 				incoming["walls"] = _latest_snapshot["walls"]
 				incoming["walls_changed"] = bool(_latest_snapshot.get("walls_changed", false))
 			_latest_snapshot = incoming
-			snapshot_updated.emit()
+			_snapshot_notification_pending = true
+			if not _polling_packets:
+				_flush_snapshot_notification()
 		"input":
+			if not message.get("payload") is Dictionary:
+				return
 			var from_slot := int(message.get("from_slot", 2))
 			_remote_inputs[from_slot] = Dictionary(message.get("payload", {}).duplicate(true))
 			_remote_input_times[from_slot] = Time.get_ticks_msec()
@@ -381,10 +413,19 @@ func _send_json(payload: Dictionary) -> void:
 	if _socket == null or _socket.get_ready_state() != WebSocketPeer.STATE_OPEN:
 		return
 
-	_socket.send_text(JSON.stringify(payload))
+	var error := _socket.send_text(JSON.stringify(payload))
+	if error != OK:
+		_handle_transport_failure("Ag gonderim kuyrugu doldu.")
+
+
+func _flush_snapshot_notification() -> void:
+	if _snapshot_notification_pending:
+		_snapshot_notification_pending = false
+		snapshot_updated.emit()
 
 
 func _reset_connection_state() -> void:
+	_snapshot_notification_pending = false
 	_pending_room_code = ""
 	_pending_server_url = ""
 	_pending_mode = "online_coop"

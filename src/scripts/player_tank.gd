@@ -167,8 +167,11 @@ func apply_cosmetic_profile(profile: Dictionary) -> void:
 	_track_color = _read_color(profile.get("track_color", _track_color), _track_color)
 	_accent_color = _read_color(profile.get("accent_color", _accent_color), _accent_color)
 	if _nameplate:
-		_nameplate.text = callsign
-		_nameplate.add_theme_color_override("font_color", _accent_color.lightened(0.12))
+		if _nameplate.text != callsign:
+			_nameplate.text = callsign
+		var name_color := _accent_color.lightened(0.12)
+		if _nameplate.get_theme_color("font_color") != name_color:
+			_nameplate.add_theme_color_override("font_color", name_color)
 	queue_redraw()
 
 

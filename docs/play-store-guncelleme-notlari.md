@@ -2,7 +2,14 @@
 
 ## tr-TR
 
-Aksoy Tank 2.0.2:
+Aksoy Tank 2.0.3:
+
+- Online paket işleme yükü ve isabet başına gereksiz dünya gönderimi azaltıldı.
+- Mermilerin paketler arasında yavaşlamasına neden olan tahmin hatası düzeltildi.
+- Gizli arayüz hesapları ve isim etiketi güncellemeleri azaltıldı.
+- Hatalı paket kontrolleri ve gönderim hatalarında yeniden bağlanma iyileştirildi.
+
+2.0.2 sürümünden korunanlar:
 
 - Co-op sonraki bölüm ve tekrar deneme iki oyuncunun onayıyla birlikte başlar.
 - Host bölümü misafire eşitlenir; eski raund paketleri yeni maça uygulanmaz.
@@ -29,7 +36,14 @@ Aksoy Tank 2.0.2:
 
 ## en-US
 
-Aksoy Tank 2.0.2:
+Aksoy Tank 2.0.3:
+
+- Reduced packet processing and redundant full-world updates during combat.
+- Fixed predicted bullets slowing toward stale network targets.
+- Reduced hidden HUD calculations and redundant nameplate updates.
+- Improved malformed packet checks and send-failure reconnection.
+
+Retained from 2.0.2:
 
 - Synchronized co-op stage progression, retries and versus rematches.
 - Host stage synchronization and rejection of stale round snapshots.

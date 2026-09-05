@@ -95,6 +95,12 @@ func _test_bullet_prediction() -> void:
 	bullet.apply_snapshot({"id": 1, "x": 100.0, "y": 100.0, "rotation": 0.0, "velocity_x": 300.0, "velocity_y": 0.0})
 	bullet._physics_process(1.0 / 60.0)
 	_require(bullet.global_position.x > 100.0, "Replica bullet did not predict between packets")
+	var start_x: float = bullet.global_position.x
+	for frame in range(12):
+		bullet._physics_process(1.0 / 60.0)
+	_require(absf(bullet.global_position.x - start_x - 60.0) < 0.01, "Replica bullet slowed toward an obsolete target between packets")
+	bullet.apply_snapshot({"id": 1, "x": 100.0, "y": 100.0, "rotation": 0.0, "velocity_x": 300.0, "velocity_y": 0.0})
+	bullet.global_position = Vector2(105.0, 100.0)
 	bullet.apply_snapshot({"id": 1, "x": 112.0, "y": 100.0, "rotation": 0.0, "velocity_x": 300.0, "velocity_y": 0.0})
 	_require(bullet.global_position.x < 112.0, "Replica bullet hard-snapped to a normal correction")
 	bullet.queue_free()

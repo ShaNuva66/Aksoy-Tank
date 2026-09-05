@@ -44,6 +44,7 @@ func _physics_process(delta: float) -> void:
 	if replica_mode:
 		global_position += _travel_velocity * delta
 		if _network_transform_ready:
+			_network_target_position += _travel_velocity * delta
 			var correction := _network_target_position - global_position
 			if correction.length() > 100.0:
 				global_position = _network_target_position
@@ -277,6 +278,7 @@ func apply_snapshot(snapshot: Dictionary) -> void:
 	else:
 		global_position = snapshot_position
 		rotation = snapshot_rotation
+	var previous_size := size_scale
 	owner_team = String(snapshot.get("team", owner_team))
 	projectile_color = Color(String(snapshot.get("projectile_color", projectile_color.to_html())))
 	glow_color = Color(String(snapshot.get("glow_color", glow_color.to_html())))
@@ -284,5 +286,6 @@ func apply_snapshot(snapshot: Dictionary) -> void:
 	size_scale = float(snapshot.get("size_scale", size_scale))
 	damage = int(snapshot.get("damage", damage))
 	_travel_velocity = Vector2(float(snapshot.get("velocity_x", _travel_velocity.x)), float(snapshot.get("velocity_y", _travel_velocity.y)))
-	_configure_projectile_shape()
+	if not is_equal_approx(previous_size, size_scale):
+		_configure_projectile_shape()
 	queue_redraw()

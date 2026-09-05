@@ -1,1 +1,1 @@
-Improved co-op stage selection, synchronized progression and retries. Synchronized 1v1 rematches. Room codes and connection status are now visible. Gameplay waits during peer disconnects, and stale movement and firing inputs expire. Fixed stale round packets, wall synchronization and rejoining matches.
+Reduced online packet processing and redundant world updates during combat. Fixed replica bullets slowing between network updates. Reduced hidden HUD work and redundant nameplate updates. Improved malformed packet checks and reconnection after send failures.

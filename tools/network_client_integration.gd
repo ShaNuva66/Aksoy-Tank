@@ -130,6 +130,7 @@ func run() -> void:
 	if mode == "online_coop" and arena._status_text != "Zafer":
 		push_error("Co-op victory was overwritten by reconnect status")
 		failed = true
+	print("NETWORK_METRICS: rtt_ms=", snappedf(net.get_latency_ms(), 0.1), " jitter_ms=", snappedf(net.get_jitter_ms(), 0.1))
 	print("NETWORK_CLIENT: ", "FAIL" if failed else "PASS", " mode=", mode, " leader=", leader, " role=", net._role)
 	await create_timer(2.0).timeout
 	net.disconnect_session(false)

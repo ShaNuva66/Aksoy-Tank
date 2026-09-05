@@ -78,7 +78,7 @@ try {
 	if (-not $appPid) { throw "Aksoy Tank Android 7 uzerinde calisir durumda degil." }
 
 	$packageInfo = (& $adb shell dumpsys package com.atalay.aksoytank) -join "`n"
-	if ($packageInfo -notmatch "versionCode=24" -or $packageInfo -notmatch "versionName=2.0.2") {
+	if ($packageInfo -notmatch "versionCode=25" -or $packageInfo -notmatch "versionName=2.0.3") {
 		throw "Android 7 cihazdaki paket surumu beklenen degerde degil."
 	}
 	$logText = (& $adb logcat -d -t 600) -join "`n"

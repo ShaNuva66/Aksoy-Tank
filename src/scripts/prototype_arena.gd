@@ -282,7 +282,8 @@ func _process(delta: float) -> void:
 		if _alert_time <= 0.0:
 			alert_label.visible = false
 
-	power_label.text = "Destek: " + _build_power_summary()
+	if power_label.visible:
+		power_label.text = "Destek: " + _build_power_summary()
 
 
 
@@ -1369,9 +1370,8 @@ func notify_tank_hit_result(at_position: Vector2, source_team: String, target_te
 	}
 	_hit_event_lifetime = 0.45
 	_present_hit_event(_last_hit_event)
-	# Send immediately instead of waiting for the 20 Hz world tick. This keeps
-	# hit feedback crisp and also delivers the final IMHA event after match end.
-	if _is_online_mode() and NetSession.is_peer_connected():
+	# Regular hits share the next 20 Hz update; only the final hit bypasses it.
+	if _match_over and _is_online_mode() and NetSession.is_peer_connected():
 		NetSession.send_snapshot(_build_world_snapshot())
 
 
