@@ -125,7 +125,7 @@ func _draw() -> void:
 
 
 func _on_body_entered(body: Node) -> void:
-	if replica_mode:
+	if replica_mode or is_queued_for_deletion():
 		return
 
 	if not body.is_in_group("player_tank"):

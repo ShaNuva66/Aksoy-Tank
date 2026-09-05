@@ -193,7 +193,12 @@ func set_external_input(input_state: Dictionary) -> void:
 	_external_input = Dictionary(input_state.duplicate(true))
 
 
+var local_input_enabled := true
+
+
 func capture_local_input_state() -> Dictionary:
+	if not local_input_enabled:
+		return {"turn": 0.0, "drive": 0.0, "move_x": 0.0, "move_y": 0.0, "aim_rotation": rotation, "fire": false}
 	var turn_input := 0.0
 	var drive_input := 0.0
 	var move_vector := Vector2.ZERO

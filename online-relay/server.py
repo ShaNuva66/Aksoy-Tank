@@ -49,6 +49,7 @@ class Peer:
     message_times: Deque[float] = field(default_factory=deque)
     rematch_ready: bool = False
     matchmaking: bool = False
+    promoted_at: float = -1.0
 
 
 ROOMS: Dict[str, Dict[ServerConnection, Peer]] = {}
@@ -176,6 +177,7 @@ async def remove_peer(connection: ServerConnection) -> None:
             if removed_peer.role == "host" and peers:
                 promoted_peer = min(peers.values(), key=lambda item: item.slot)
                 promoted_peer.role = "host"
+                promoted_peer.promoted_at = time.monotonic()
                 promoted_peer.rematch_ready = False
             elif not peers:
                 ROOMS.pop(room_code, None)
@@ -309,7 +311,11 @@ async def relay_to_room(sender: Peer, payload: dict) -> None:
     }
     for peer in peers:
         if peer.connection != sender.connection:
-            await send_json(peer.connection, message)
+            try:
+                await send_json(peer.connection, message)
+            except ConnectionClosed:
+                # A departing recipient must not disconnect the healthy sender.
+                continue
 
 
 async def handler(connection: ServerConnection) -> None:
@@ -378,6 +384,11 @@ async def handler(connection: ServerConnection) -> None:
                 continue
 
             if message_type == "input":
+                # Guest inputs already in transit may arrive just after promotion.
+                if (current_peer.role == "host" and current_peer.promoted_at >= 0
+                        and time.monotonic() - current_peer.promoted_at < 2.0
+                        and valid_input(payload.get("payload"))):
+                    continue
                 if current_peer.role != "guest" or not valid_input(payload.get("payload")):
                     await send_error(connection, "Gecersiz oyuncu girdisi.")
                     continue

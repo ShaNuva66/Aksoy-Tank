@@ -2,7 +2,12 @@
 
 ## tr-TR
 
-Aksoy Tank 2.0.0:
+Aksoy Tank 2.0.1:
+
+- Online maç menüsü, Android geri düğmesi ve arka plana geçiş davranışı düzeltildi.
+- Host devri sırasında nesne kimlikleri, duvar sürümü ve bekleyen dalga durumu korunur.
+- Kapanan bağlantıya gönderilen mesajın diğer oyuncuyu da düşürmesi giderildi.
+- Tahkimat desteğinin fizik işlemi sırasında duvar oluşturma hatası giderildi.
 
 - Hızlı eşleşme veya oda koduyla çevrim içi co-op ve 1v1 modları açıldı.
 - Kısa bağlantı kesintilerinde otomatik yeniden bağlanma ve oda sahibi devri eklendi.
@@ -17,7 +22,7 @@ Aksoy Tank 2.0.0:
 
 ## en-US
 
-Aksoy Tank 2.0.0:
+Aksoy Tank 2.0.1:
 
 - Added quick matchmaking and private room-code online co-op and 1v1 modes.
 - Added automatic reconnect and host migration for brief connection losses.

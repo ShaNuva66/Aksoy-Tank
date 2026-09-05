@@ -253,7 +253,7 @@ func clear_match_buffers() -> void:
 
 
 func send_input(input_state: Dictionary) -> void:
-	if not is_online_active():
+	if not is_online_active() or is_host():
 		return
 
 	_send_json({

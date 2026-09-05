@@ -131,6 +131,7 @@ var _snapshot_send_timer := SNAPSHOT_INTERVAL
 var _input_send_timer := INPUT_SEND_INTERVAL
 var _waiting_for_peer := false
 var _paused := false
+var _previous_quit_on_go_back := true
 var _heart_hud: Control = null
 var _damage_overlay: Control = null
 var _onboarding_guide: Control = null
@@ -166,6 +167,8 @@ var _last_applied_hit_event_sequence := 0
 
 
 func _ready() -> void:
+	_previous_quit_on_go_back = get_tree().quit_on_go_back
+	get_tree().quit_on_go_back = false
 	set_process_input(true)
 	_configure_capture_request()
 	if _capture_stage_index >= 0:
@@ -234,6 +237,7 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	get_tree().quit_on_go_back = _previous_quit_on_go_back
 	if _is_online_mode():
 		if NetSession.peer_status_changed.is_connected(_on_online_peer_status_changed):
 			NetSession.peer_status_changed.disconnect(_on_online_peer_status_changed)
@@ -326,7 +330,7 @@ func _input(event: InputEvent) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_ESCAPE and not _match_over and not _capture_requested and not _is_online_mode():
+		if event.keycode == KEY_ESCAPE and not _match_over and not _capture_requested:
 			_toggle_pause_menu()
 			return
 
@@ -1156,7 +1160,7 @@ func _on_pause_buttons_button_pressed() -> void:
 
 
 func _toggle_pause_menu() -> void:
-	if _match_over or _capture_requested or _is_online_mode():
+	if _match_over or _capture_requested:
 		return
 
 	_set_pause_state(not _paused)
@@ -1165,7 +1169,16 @@ func _toggle_pause_menu() -> void:
 func _set_pause_state(paused: bool) -> void:
 	_paused = paused
 	pause_overlay.visible = paused
-	get_tree().paused = paused
+	get_tree().paused = paused and not _is_online_mode()
+	for control in [pause_overlay, pause_panel, pause_resume_button, pause_menu_button]:
+		control.process_mode = Node.PROCESS_MODE_ALWAYS
+	var local_player = _get_player_by_slot(_local_player_slot)
+	if is_instance_valid(local_player):
+		local_player.local_input_enabled = not paused
+	if paused and _is_online_mode() and not _is_authority():
+		NetSession.send_input({"turn": 0.0, "drive": 0.0, "move_x": 0.0, "move_y": 0.0, "fire": false})
+	$Hud/PauseOverlay/CenterContainer/Panel/Margin/VBox/Title.text = "MAC MENUSU" if _is_online_mode() else "DURAKLATILDI"
+	pause_menu_button.text = "MACTAN AYRIL" if _is_online_mode() else "ANA MENU"
 
 	if mobile_controls and mobile_controls.has_method("set_controls_enabled"):
 		mobile_controls.set_controls_enabled(not paused and not _match_over)
@@ -1189,7 +1202,16 @@ func _refresh_pause_overlay() -> void:
 
 
 func _refresh_pause_button_visibility() -> void:
-	pause_button.visible = not _paused and not _match_over and not _capture_requested and not _is_online_mode()
+	pause_button.visible = not _paused and not _match_over and not _capture_requested
+
+
+func _notification(what: int) -> void:
+	if not is_node_ready() or _match_over or _capture_requested:
+		return
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
+		_set_pause_state(true)
+	elif what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		_toggle_pause_menu()
 
 
 func _apply_black_cat_theme() -> void:
@@ -1548,7 +1570,7 @@ func _on_pickup_collected(pickup_type: String, at_position: Vector2, collector: 
 	}
 
 	if pickup_type == "fortify" and _stage_has_core():
-		_reinforce_base_fort()
+		_reinforce_base_fort.call_deferred()
 		result["title"] = "Cekirdek Tahkimi"
 		result["detail"] = "Cekirdek cevresi 7 vurusluk zirhla yenilendi."
 		result["tint"] = Color("#ffd97a")
@@ -1855,12 +1877,21 @@ func _on_online_room_joined(_room_code: String, role: String, slot: int) -> void
 func _on_online_authority_changed(_role: String, slot: int) -> void:
 	_local_player_slot = slot
 	var authority := _is_authority()
+	if authority:
+		if not _pending_network_snapshot.is_empty():
+			_apply_world_snapshot(_pending_network_snapshot)
+			_pending_network_snapshot.clear()
+		_wall_revision = maxi(_wall_revision, _last_applied_wall_revision)
+		for group in ["enemy_tanks", "bullets", "pickups"]:
+			for entity in get_tree().get_nodes_in_group(group):
+				_next_network_id = maxi(_next_network_id, int(entity.network_id) + 1)
 	for player_slot in range(1, _player_count + 1):
 		var player_node = _get_player_by_slot(player_slot)
 		if not is_instance_valid(player_node):
 			continue
 		if player_slot == _local_player_slot:
 			player_node.set_control_mode("local")
+			player_node.local_input_enabled = not _paused
 			player_node.set_spawn_bullets_enabled(authority)
 		elif authority:
 			player_node.set_control_mode("network_input")
@@ -1870,6 +1901,8 @@ func _on_online_authority_changed(_role: String, slot: int) -> void:
 			player_node.set_spawn_bullets_enabled(false)
 	for enemy in get_tree().get_nodes_in_group("enemy_tanks"):
 		enemy.set_replica_mode(not authority)
+		if authority and not enemy.destroyed.is_connected(_on_enemy_destroyed):
+			enemy.destroyed.connect(_on_enemy_destroyed)
 	for bullet in get_tree().get_nodes_in_group("bullets"):
 		bullet.set_replica_mode(not authority)
 	for pickup in get_tree().get_nodes_in_group("pickups"):

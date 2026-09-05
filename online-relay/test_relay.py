@@ -213,6 +213,22 @@ class RelayIntegrationTests(unittest.IsolatedAsyncioTestCase):
         rejection = await join(invalid, "BADMODE", mode="local")
         self.assertIn("Desteklenmeyen", rejection["message"])
 
+    async def test_promoted_host_tolerates_in_flight_guest_input(self):
+        host = await self.open()
+        guest = await self.open()
+        await join(host, "LATE01")
+        await join(guest, "LATE01")
+        await host.close()
+        await receive_type(guest, "authority_changed")
+        await guest.send(json.dumps({"type": "input", "payload": {"fire": False}}))
+        await guest.send(json.dumps({"type": "ping", "sent_at": 42}))
+        while True:
+            message = json.loads(await asyncio.wait_for(guest.recv(), timeout=2))
+            self.assertNotEqual(message["type"], "error")
+            if message["type"] == "pong":
+                self.assertEqual(message["sent_at"], 42)
+                break
+
     async def test_host_departure_promotes_guest_and_accepts_replacement(self):
         host = await self.open()
         guest = await self.open()
