@@ -1,5 +1,7 @@
 extends Node
 
+const SNAPSHOT_CODEC = preload("res://src/scripts/snapshot_codec.gd")
+
 signal status_changed(state: String, message: String)
 signal room_joined(room_code: String, role: String, slot: int)
 signal peer_status_changed(connected: bool, player_count: int)
@@ -288,7 +290,7 @@ func send_snapshot(snapshot: Dictionary) -> void:
 
 	_send_json({
 		"type": "snapshot",
-		"payload": snapshot
+		"payload": SNAPSHOT_CODEC.encode(snapshot)
 	})
 
 
@@ -352,7 +354,9 @@ func _handle_message(payload_text: String) -> void:
 		"snapshot":
 			if not message.get("payload") is Dictionary:
 				return
-			var incoming: Dictionary = message["payload"]
+			var incoming: Dictionary = SNAPSHOT_CODEC.decode(message["payload"])
+			if incoming.is_empty():
+				return
 			if not incoming.get("meta", {}) is Dictionary:
 				return
 			for field in ["players", "enemies", "bullets", "pickups", "walls"]:

@@ -2,7 +2,14 @@
 
 ## tr-TR
 
-Aksoy Tank 2.0.3:
+Aksoy Tank 2.0.4:
+
+- Online maçlar iki oyuncunun arenası hazır olana kadar bekler; ortak 3 saniyelik geri sayımla başlar.
+- Tekrarlanan alan adlarını azaltan, önceki paketten bağımsız kompakt oyun durumu biçimi eklendi.
+- Gecikme, dalgalanma ve bant sınırı altında gerçek iki istemcili co-op ve 1V1 testleri eklendi.
+- Yeniden bağlanırken eski hazır olma onaylarının yeni başlangıcı tetiklemesi engellendi.
+
+2.0.3 sürümünden korunanlar:
 
 - Online paket işleme yükü ve isabet başına gereksiz dünya gönderimi azaltıldı.
 - Mermilerin paketler arasında yavaşlamasına neden olan tahmin hatası düzeltildi.
@@ -36,7 +43,14 @@ Aksoy Tank 2.0.3:
 
 ## en-US
 
-Aksoy Tank 2.0.3:
+Aksoy Tank 2.0.4:
+
+- Online matches wait for both arenas to load, then use a shared three-second countdown.
+- Added compact, self-contained world packets without previous-packet dependencies.
+- Added real two-client co-op and versus checks with latency, jitter and bandwidth limits.
+- Invalidated stale readiness acknowledgements after reconnecting.
+
+Retained from 2.0.3:
 
 - Reduced packet processing and redundant full-world updates during combat.
 - Fixed predicted bullets slowing toward stale network targets.

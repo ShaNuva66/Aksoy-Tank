@@ -39,6 +39,22 @@ func run() -> void:
 	check_control(arena.pause_resume_button)
 	await capture("online-menu-match")
 	arena._set_pause_state(false)
+	net._peer_connected = true
+	net._remote_inputs[2] = {"ready_token": arena._online_ready_token}
+	net._remote_input_times[2] = Time.get_ticks_msec()
+	await create_timer(0.2).timeout
+	check_control(arena._online_countdown_label)
+	if not arena._waiting_for_peer or arena._online_countdown_label.text != "3":
+		failed = true
+	await capture("online-countdown")
+	arena._set_pause_state(true)
+	await create_timer(0.15).timeout
+	if arena._online_countdown_label.visible:
+		failed = true
+	await capture("online-countdown-menu")
+	arena._set_pause_state(false)
+	if not arena._online_countdown_label.visible:
+		failed = true
 	arena.queue_free()
 	await process_frame
 	net.disconnect_session(false)

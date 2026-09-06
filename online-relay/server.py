@@ -83,8 +83,11 @@ def room_profiles(room_code: str) -> list[dict]:
 def valid_input(payload: object) -> bool:
     if not isinstance(payload, dict):
         return False
-    allowed = {"turn", "drive", "move_x", "move_y", "aim_rotation", "fire"}
+    allowed = {"turn", "drive", "move_x", "move_y", "aim_rotation", "fire", "ready_token"}
     if not set(payload).issubset(allowed):
+        return False
+    ready_token = payload.get("ready_token", 0)
+    if type(ready_token) is not int or not 0 <= ready_token <= 2147483647:
         return False
     for key in ("turn", "drive", "move_x", "move_y"):
         value = payload.get(key, 0.0)

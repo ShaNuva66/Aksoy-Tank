@@ -44,10 +44,16 @@ func run() -> void:
 	leader = net.is_host()
 	session.session_mode = mode
 	session.selected_stage_index = 2 if leader else 8
+	if not leader:
+		await create_timer(1.0).timeout
 	var arena = load("res://src/scenes/prototype_arena.tscn").instantiate()
 	root.add_child(arena)
 	current_scene = arena
-	await create_timer(2.0).timeout
+	await create_timer(0.5).timeout
+	if not current_scene._waiting_for_peer or current_scene._spawned_enemies != 0:
+		push_error("Match ran before both arenas were ready and countdown finished")
+		failed = true
+	await wait_for_start()
 	arena = current_scene
 	if int(arena._stage_data.get("index", -1)) != 2:
 		push_error("Clients did not synchronize the host stage")
@@ -84,6 +90,7 @@ func run() -> void:
 	else:
 		arena._on_retry_requested()
 	await create_timer(2.0).timeout
+	await wait_for_start()
 	arena = current_scene
 	var expected_stage := 3 if mode == "online_coop" else 2
 	if arena._match_over or int(arena._stage_data.get("index", -1)) != expected_stage:
@@ -95,6 +102,7 @@ func run() -> void:
 	await create_timer(1.0).timeout
 	arena._on_retry_requested()
 	await create_timer(2.0).timeout
+	await wait_for_start()
 	arena = current_scene
 	if arena._match_over or int(arena._stage_data.get("index", -1)) != expected_stage:
 		push_error("Synchronized retry failed")
@@ -142,6 +150,16 @@ func run() -> void:
 	session.unlocked_stage_count = old_state[2]
 	session.onboarding_completed = old_state[3]
 	quit(1 if failed else 0)
+
+
+func wait_for_start() -> void:
+	var deadline := Time.get_ticks_msec() + 12000
+	while current_scene._waiting_for_peer and Time.get_ticks_msec() < deadline:
+		await process_frame
+	if current_scene._waiting_for_peer:
+		failed = true
+		push_error("Ready/countdown did not release the arena")
+	await create_timer(0.5).timeout
 
 
 func set_key(code: Key, pressed: bool) -> void:

@@ -47,6 +47,12 @@ async def matchmake(socket, build="1.5.0", mode="online_vs"):
 
 
 class RelayIntegrationTests(unittest.IsolatedAsyncioTestCase):
+    def test_ready_input_validation(self):
+        self.assertTrue(server.valid_input({"ready_token": 2147483647}))
+        self.assertTrue(server.valid_input({"fire": False, "ready_token": 12}))
+        for token in (True, -1, 2147483648, 1.5, "12", None):
+            self.assertFalse(server.valid_input({"ready_token": token}))
+
     async def asyncSetUp(self):
         server.ROOMS.clear()
         server.ROOM_ROUNDS.clear()

@@ -1,1 +1,1 @@
-Reduced online packet processing and redundant world updates during combat. Fixed replica bullets slowing between network updates. Reduced hidden HUD work and redundant nameplate updates. Improved malformed packet checks and reconnection after send failures.
+Online matches now wait for both arenas to load before a shared three-second countdown. Reduced world-state packet sizes. Expanded co-op and 1V1 checks for delayed connections, retries and reconnection. Improved readiness status and countdown presentation.

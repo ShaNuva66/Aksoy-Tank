@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.request import urlopen
 
 
-def run(godot, server=None):
+def run(godot, server=None, impaired=False):
     # Launch the engine directly and isolate each client's persistent settings.
     engine = godot.replace("_console.exe", ".exe")
     if Path(engine).exists():
@@ -48,6 +48,20 @@ def run(godot, server=None):
                 time.sleep(0.1)
         else:
             raise RuntimeError("Relay startup timeout")
+        if impaired:
+            with socket.socket() as sock:
+                sock.bind(("127.0.0.1", 0))
+                proxy_port = sock.getsockname()[1]
+            proxy = subprocess.Popen([sys.executable, "traffic_proxy.py", "--port", str(proxy_port),
+                                      "--upstream", server, "--latency-ms", "100", "--jitter-ms", "30",
+                                      "--bandwidth-kbps", "512"], cwd=root / "online-relay",
+                                     stdout=subprocess.PIPE, stderr=None, text=True)
+            children.append(proxy)
+            # stdout is a single readiness line; no traffic is logged by the proxy.
+            if proxy.stdout.readline().strip() != "TRAFFIC_PROXY: READY":
+                raise RuntimeError("Traffic proxy startup failed")
+            server = f"ws://127.0.0.1:{proxy_port}/ws"
+            print("IMPAIRED_NETWORK: each direction latency=100ms jitter=30ms bandwidth=512kbps")
         for mode in ("online_coop", "online_vs"):
             args = [godot, "--headless", "--path", str(root), "--script",
                     "res://tools/network_client_integration.gd", "--",
@@ -64,7 +78,7 @@ def run(godot, server=None):
             children.append(guest)
             failures = []
             with ThreadPoolExecutor(max_workers=2) as executor:
-                futures = [executor.submit(process.communicate, timeout=60) for process in (host, guest)]
+                futures = [executor.submit(process.communicate, timeout=90) for process in (host, guest)]
                 for process, future in zip((host, guest), futures):
                     output, _ = future.result()
                     print(output)
@@ -85,5 +99,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--godot", required=True)
     parser.add_argument("--server", help="Optional production wss:// endpoint")
+    parser.add_argument("--impaired", action="store_true", help="Test through local latency/jitter/bandwidth proxy")
     args = parser.parse_args()
-    run(args.godot, args.server)
+    run(args.godot, args.server, args.impaired)

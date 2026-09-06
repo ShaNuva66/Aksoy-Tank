@@ -45,11 +45,11 @@ func _process(_delta: float) -> bool:
 
 		if peer.get_ready_state() == WebSocketPeer.STATE_OPEN and not _sent_join[index]:
 			if index >= 4:
-				peer.send_text(JSON.stringify({"type": "matchmake", "mode": "online_coop", "build": "2.0.3", "profile": {"name": "AutoProbe", "style_id": "akinci"}}))
+				peer.send_text(JSON.stringify({"type": "matchmake", "mode": "online_coop", "build": "2.0.4", "profile": {"name": "AutoProbe", "style_id": "akinci"}}))
 			else:
 				var room_code := "GODOT1" if index < 2 else "MODE1"
 				var room_mode := "online_coop" if index == 3 else "online_vs"
-				peer.send_text(JSON.stringify({"type": "join", "room_code": room_code, "mode": room_mode, "build": "2.0.3", "profile": {"name": "Probe", "style_id": "akinci"}}))
+				peer.send_text(JSON.stringify({"type": "join", "room_code": room_code, "mode": room_mode, "build": "2.0.4", "profile": {"name": "Probe", "style_id": "akinci"}}))
 			_sent_join[index] = true
 
 		while peer.get_available_packet_count() > 0:

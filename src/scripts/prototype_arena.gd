@@ -130,6 +130,11 @@ var _next_network_id := 1
 var _snapshot_send_timer := SNAPSHOT_INTERVAL
 var _input_send_timer := INPUT_SEND_INTERVAL
 var _waiting_for_peer := false
+var _online_start_remaining := -1.0
+var _online_ready_token := 0
+var _online_countdown_number := -1
+var _online_countdown_label: Label = null
+var _online_countdown_tween: Tween = null
 var _paused := false
 var _previous_quit_on_go_back := true
 var _heart_hud: Control = null
@@ -211,7 +216,8 @@ func _ready() -> void:
 	pause_analog_button.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
 	pause_buttons_button.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
 	pause_overlay.visible = false
-	_update_wait_state(_is_online_mode() and not _capture_requested and not NetSession.is_peer_connected())
+	_online_ready_token = randi_range(1, 2147483647)
+	_update_wait_state(_is_online_mode() and not _capture_requested)
 	_update_hud()
 	_start_onboarding_if_needed()
 	_refresh_pause_button_visibility()
@@ -295,11 +301,13 @@ func _physics_process(delta: float) -> void:
 	if _is_authority():
 		if _match_over:
 			return
-		_apply_remote_player_input()
-		if _waiting_for_peer or not NetSession.is_peer_connected():
+		if not NetSession.is_peer_connected():
 			return
-		_tick_vs_center_cache(delta)
-		_tick_vs_corner_caches(delta)
+		_tick_online_start(delta)
+		if not _waiting_for_peer:
+			_apply_remote_player_input()
+			_tick_vs_center_cache(delta)
+			_tick_vs_corner_caches(delta)
 		_snapshot_send_timer = max(_snapshot_send_timer - delta, 0.0)
 		if _snapshot_send_timer <= 0.0:
 			_snapshot_send_timer = SNAPSHOT_INTERVAL
@@ -309,16 +317,16 @@ func _physics_process(delta: float) -> void:
 	if not _pending_network_snapshot.is_empty():
 		_apply_world_snapshot(_pending_network_snapshot)
 		_pending_network_snapshot.clear()
-	if _match_over or _waiting_for_peer:
+	if _match_over or not NetSession.is_peer_connected():
 		return
 
 	var local_player = _get_local_player()
-	if local_player == null:
-		return
 	_input_send_timer = max(_input_send_timer - delta, 0.0)
 	if _input_send_timer <= 0.0:
 		_input_send_timer = INPUT_SEND_INTERVAL
-		NetSession.send_input(local_player.capture_local_input_state())
+		var input_state: Dictionary = {} if _waiting_for_peer or local_player == null else local_player.capture_local_input_state()
+		input_state["ready_token"] = _online_ready_token
+		NetSession.send_input(input_state)
 
 
 func _input(event: InputEvent) -> void:
@@ -1023,6 +1031,8 @@ func _play_result_presentation(local_won: bool, draw_result: bool) -> void:
 
 
 func _stop_match_entities() -> void:
+	if _online_countdown_label:
+		_online_countdown_label.hide()
 	if mobile_controls and mobile_controls.has_method("set_controls_enabled"):
 		mobile_controls.set_controls_enabled(false)
 	for bullet in get_tree().get_nodes_in_group("bullets"):
@@ -1057,7 +1067,10 @@ func _update_network_info_label() -> void:
 		if not NetSession.is_online_active():
 			network_suffix = " | " + NetSession.get_status_message()
 		elif _waiting_for_peer:
-			network_suffix = " | ODA %s | OYUNCU BEKLENIYOR" % GameSession.get_room_code()
+			var waiting_text := "OYUNCU BEKLENIYOR"
+			if NetSession.is_peer_connected():
+				waiting_text = "MAC BASLIYOR" if _online_start_remaining > 0.0 else "ARENA HAZIRLANIYOR"
+			network_suffix = " | ODA %s | %s" % [GameSession.get_room_code(), waiting_text]
 	info_label.text = "S%02d | %s | %s%s" % [_stage_data.get("number", 1), _stage_data.get("name", "Arena"), _get_mode_label(), network_suffix]
 	if _is_online_mode():
 		info_label.text = network_suffix.trim_prefix(" | ")
@@ -1206,6 +1219,8 @@ func _toggle_pause_menu() -> void:
 
 func _set_pause_state(paused: bool) -> void:
 	_paused = paused
+	if _online_countdown_label:
+		_online_countdown_label.visible = not paused and not _match_over and _online_start_remaining > 0.0
 	pause_overlay.visible = paused
 	get_tree().paused = paused and not _is_online_mode()
 	for control in [pause_overlay, pause_panel, pause_resume_button, pause_menu_button]:
@@ -1888,6 +1903,76 @@ func _update_wait_state(waiting: bool) -> void:
 		_status_text = "Catismaya devam"
 
 
+func _reset_online_start() -> void:
+	if _match_over:
+		return
+	_online_start_remaining = -1.0
+	_online_countdown_number = -1
+	if _online_countdown_tween:
+		_online_countdown_tween.kill()
+	if _online_countdown_label:
+		_online_countdown_label.hide()
+	if _is_authority():
+		_online_ready_token = randi_range(1, 2147483647)
+
+
+func _tick_online_start(delta: float) -> void:
+	if _online_start_remaining == 0.0:
+		return
+	if _online_start_remaining < 0.0:
+		var remote_slot := 2 if _local_player_slot == 1 else 1
+		var ready_input := NetSession.get_remote_input(remote_slot)
+		if int(ready_input.get("ready_token", 0)) != _online_ready_token:
+			return
+		_online_start_remaining = 3.0
+	else:
+		_online_start_remaining = maxf(0.0, _online_start_remaining - delta)
+	_present_online_countdown()
+	if _online_start_remaining == 0.0:
+		_update_wait_state(false)
+		if not _is_vs_mode() and spawn_timer.is_stopped():
+			spawn_timer.start(_scaled_spawn_delay(1.0))
+		_snapshot_send_timer = 0.0
+
+
+func _present_online_countdown() -> void:
+	if _online_start_remaining < 0.0 or _match_over:
+		return
+	var number := ceili(_online_start_remaining)
+	if number != _online_countdown_number:
+		_online_countdown_number = number
+		if _online_countdown_label == null:
+			_online_countdown_label = Label.new()
+			_online_countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			_online_countdown_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			_online_countdown_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_online_countdown_label.add_theme_font_size_override("font_size", 64)
+			_online_countdown_label.add_theme_color_override("font_color", Color.WHITE)
+			_online_countdown_label.add_theme_color_override("font_outline_color", Color("#15191e"))
+			_online_countdown_label.add_theme_constant_override("outline_size", 8)
+			hud.add_child(_online_countdown_label)
+			_online_countdown_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+			_online_countdown_label.offset_left = -140
+			_online_countdown_label.offset_right = 140
+			_online_countdown_label.offset_top = -60
+			_online_countdown_label.offset_bottom = 60
+		if _online_countdown_tween:
+			_online_countdown_tween.kill()
+		_online_countdown_label.text = str(number) if number > 0 else "BASLA"
+		_online_countdown_label.visible = not _paused
+		_online_countdown_label.modulate.a = 1.0
+		_online_countdown_tween = create_tween()
+		if not GameSession.is_reduced_motion_enabled():
+			_online_countdown_label.modulate.a = 0.0
+			_online_countdown_tween.tween_property(_online_countdown_label, "modulate:a", 1.0, 0.12)
+		if number == 0:
+			_online_countdown_tween.tween_interval(0.45)
+			_online_countdown_tween.tween_callback(_online_countdown_label.hide)
+		else:
+			_online_countdown_tween.tween_interval(0.1)
+		_update_network_info_label()
+
+
 func _apply_remote_player_input() -> void:
 	if not _is_online_mode() or not _is_authority():
 		return
@@ -1902,17 +1987,18 @@ func _apply_remote_player_input() -> void:
 
 func _on_online_peer_status_changed(connected: bool, _count: int) -> void:
 	_apply_online_player_profiles()
-	_update_wait_state(not connected)
+	_update_wait_state(not connected or (not _match_over and _online_start_remaining != 0.0))
 
 	if connected:
 		if _is_authority():
 			_last_sent_wall_revision = -1
 			call_deferred("_send_full_online_state")
-		var connected_text := "Rakip baglandi. Duello basliyor." if _is_vs_mode() else "Es oyuncu baglandi. Operasyon basliyor."
+		var connected_text := "Oyuncu baglandi. Arena hazirlaniyor."
 		_show_alert(connected_text, _get_theme_color("hud_accent", Color("#f2d48f")))
-		if _is_authority() and spawn_timer.is_stopped() and not _match_over and not _is_vs_mode():
+		if _is_authority() and not _waiting_for_peer and spawn_timer.is_stopped() and not _match_over and not _is_vs_mode():
 			spawn_timer.start(_scaled_spawn_delay(1.0))
 	else:
+		_reset_online_start()
 		_rematch_ready_slots.clear()
 		retry_button.disabled = false
 		next_stage_button.disabled = false
@@ -1923,6 +2009,7 @@ func _on_online_peer_status_changed(connected: bool, _count: int) -> void:
 
 func _on_online_connection_status(state: String, _message: String) -> void:
 	if state != NetSession.STATUS_CONNECTED:
+		_reset_online_start()
 		_update_wait_state(true)
 	_update_network_info_label()
 
@@ -1938,7 +2025,7 @@ func _on_online_room_joined(_room_code: String, role: String, slot: int) -> void
 	_on_online_authority_changed(role, slot)
 	_configure_mobile_controls()
 	_apply_online_player_profiles()
-	_update_wait_state(not NetSession.is_peer_connected())
+	_update_wait_state(not NetSession.is_peer_connected() or (not _match_over and _online_start_remaining != 0.0))
 
 
 func _on_online_authority_changed(_role: String, slot: int) -> void:
@@ -2020,6 +2107,8 @@ func _build_world_snapshot() -> Dictionary:
 		"walls_changed": walls_changed,
 		"walls_revision": _wall_revision,
 		"meta": {
+			"ready_token": _online_ready_token,
+			"start_remaining": _online_start_remaining,
 			"round_id": NetSession._round_id if _is_online_mode() else 0,
 			"stage_index": int(_stage_data.get("index", 0)),
 			"hit_event": _last_hit_event.duplicate(true) if _hit_event_lifetime > 0.0 else {},
@@ -2233,6 +2322,11 @@ func _apply_wall_snapshot(walls: Array) -> void:
 
 func _apply_meta_snapshot(meta: Dictionary) -> void:
 	var was_match_over := _match_over
+	_online_ready_token = int(meta.get("ready_token", _online_ready_token))
+	_online_start_remaining = float(meta.get("start_remaining", _online_start_remaining))
+	if _is_online_mode() and not _is_authority():
+		_update_wait_state(not NetSession.is_peer_connected() or _online_start_remaining != 0.0)
+		_present_online_countdown()
 	_present_hit_event(Dictionary(meta.get("hit_event", {})))
 	_spawned_enemies = int(meta.get("spawned", _spawned_enemies))
 	_alive_enemies = int(meta.get("alive", _alive_enemies))
