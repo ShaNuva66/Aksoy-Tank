@@ -8,12 +8,18 @@ var rejoined := false
 var failed := false
 var remote_shots := 0
 var room_code := "INTEG42"
+var browser_mode := false
+var directory_server := ""
 
 
 func _init() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg == "--leader":
 			leader = true
+		elif arg == "--browser":
+			browser_mode = true
+		elif arg.begins_with("--directory-server="):
+			directory_server = arg.trim_prefix("--directory-server=")
 		elif arg.begins_with("--mode="):
 			mode = arg.trim_prefix("--mode=")
 		elif arg.begins_with("--server="):
@@ -32,7 +38,36 @@ func run() -> void:
 	net.room_joined.connect(func(room, role, slot):
 		rejoined = true
 		print("JOIN: ", room, " ", role, " ", slot, " at=", Time.get_unix_time_from_system()))
-	net.connect_to_room(server, room_code, mode)
+	if browser_mode:
+		if leader:
+			net.connect_browser_room(server, mode, "", "integration-password", room_code)
+		else:
+			var http := HTTPRequest.new()
+			http.timeout = 5
+			root.add_child(http)
+			var url := directory_server.replace("wss://", "https://").replace("ws://", "http://")
+			url = url.get_slice("://", 0) + "://" + url.get_slice("://", 1).get_slice("/", 0) + "/aksoy-tank/rooms?mode=" + mode + "&build=" + String(ProjectSettings.get_setting("application/config/version"))
+			var code := ""
+			for attempt in range(12):
+				if http.request(url) != OK:
+					break
+				var result: Array = await http.request_completed
+				var listing = JSON.parse_string(PackedByteArray(result[3]).get_string_from_utf8())
+				if listing is Dictionary:
+					for room in listing.get("rooms", []):
+						if room.get("name", "") == room_code:
+							code = String(room.get("code", ""))
+				if not code.is_empty():
+					break
+				await create_timer(0.25).timeout
+			http.queue_free()
+			if code.is_empty():
+				push_error("Created room was not listed")
+				quit(1)
+				return
+			net.connect_browser_room(server, mode, code, "integration-password")
+	else:
+		net.connect_to_room(server, room_code, mode)
 	var deadline := Time.get_ticks_msec() + 15000
 	while not net.is_peer_connected() and Time.get_ticks_msec() < deadline:
 		await process_frame

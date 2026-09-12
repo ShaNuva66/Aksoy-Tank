@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.request import urlopen
 
 
-def run(godot, server=None, impaired=False):
+def run(godot, server=None, impaired=False, browser=False):
     # Launch the engine directly and isolate each client's persistent settings.
     engine = godot.replace("_console.exe", ".exe")
     if Path(engine).exists():
@@ -48,6 +48,7 @@ def run(godot, server=None, impaired=False):
                 time.sleep(0.1)
         else:
             raise RuntimeError("Relay startup timeout")
+        directory_server = server
         if impaired:
             with socket.socket() as sock:
                 sock.bind(("127.0.0.1", 0))
@@ -66,6 +67,8 @@ def run(godot, server=None, impaired=False):
             args = [godot, "--headless", "--path", str(root), "--script",
                     "res://tools/network_client_integration.gd", "--",
                     f"--mode={mode}", f"--server={server}", f"--room=IT{secrets.token_hex(3).upper()}"]
+            if browser:
+                args += ["--browser", f"--directory-server={directory_server}"]
             host_args = args[:1] + ["--log-file", str(root.parent / "aksoy-tank-builds" / "integration-host.log")] + args[1:] + ["--leader"]
             guest_args = args[:1] + ["--log-file", str(root.parent / "aksoy-tank-builds" / "integration-guest.log")] + args[1:]
             guest_args[guest_args.index("--path") + 1] = str(guest_root)
@@ -100,5 +103,6 @@ if __name__ == "__main__":
     parser.add_argument("--godot", required=True)
     parser.add_argument("--server", help="Optional production wss:// endpoint")
     parser.add_argument("--impaired", action="store_true", help="Test through local latency/jitter/bandwidth proxy")
+    parser.add_argument("--browser", action="store_true", help="Create/list/join a password-protected room")
     args = parser.parse_args()
-    run(args.godot, args.server, args.impaired)
+    run(args.godot, args.server, args.impaired, args.browser)

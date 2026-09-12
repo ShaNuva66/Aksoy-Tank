@@ -2,6 +2,14 @@
 
 ## tr-TR
 
+Aksoy Tank 2.0.6 (surum kodu 28):
+
+- VS ve Co-op odalarini listeleme, yenileme, oda olusturma ve listeden katilim.
+- Istege bagli sifreli odalar, sunucuda sifre dogrulamasi ve katilim denemesi siniri.
+- Oyuncu sayisi, acik/sifreli ve bekleyen/baslamis mac durumlari.
+- Baslamis maclarda sadece mevcut oyuncuya ait oturum anahtariyla yeniden baglanma.
+- Oda listesi ve sifrelerin islenmesini aciklayan guncel gizlilik metni.
+
 Aksoy Tank 2.0.5 (surum kodu 27):
 
 - Ilk dokunusu merkez alan kayan analog, bagimsiz coklu dokunusla ates ve odak kaybinda temizlenen kontroller.

@@ -1,5 +1,8 @@
 import asyncio
 import json
+import hashlib
+import hmac
+import ipaddress
 import logging
 import math
 import os
@@ -10,6 +13,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Deque, Dict, Optional
+from urllib.parse import parse_qs, urlsplit
 
 from websockets.asyncio.server import ServerConnection, serve
 from websockets.datastructures import Headers
@@ -54,7 +58,49 @@ class Peer:
 
 ROOMS: Dict[str, Dict[ServerConnection, Peer]] = {}
 ROOM_ROUNDS: Dict[str, int] = {}
+ROOM_OPTIONS: Dict[str, dict] = {}
+JOIN_ATTEMPTS: Dict[str, deque] = {}
+TRUSTED_PROXY_CIDR = os.environ.get("AKSOY_TANK_TRUSTED_PROXY_CIDR", "")
 ROOM_LOCK = asyncio.Lock()
+
+
+def admit_join(connection: ServerConnection) -> bool:
+    address = str(connection.remote_address[0]) if connection.remote_address else "unknown"
+    if TRUSTED_PROXY_CIDR and connection.request:
+        try:
+            if ipaddress.ip_address(address) in ipaddress.ip_network(TRUSTED_PROXY_CIDR):
+                address = str(ipaddress.ip_address(connection.request.headers.get("X-Forwarded-For", address).split(",")[-1].strip()))
+        except ValueError:
+            return False
+    now = time.monotonic()
+    for key in list(JOIN_ATTEMPTS):
+        if not JOIN_ATTEMPTS[key] or JOIN_ATTEMPTS[key][-1] < now - 60:
+            del JOIN_ATTEMPTS[key]
+    if address not in JOIN_ATTEMPTS and len(JOIN_ATTEMPTS) >= 4096:
+        return False
+    attempts = JOIN_ATTEMPTS.setdefault(address, deque())
+    while attempts and attempts[0] < now - 60:
+        attempts.popleft()
+    if len(attempts) >= 60:
+        return False
+    attempts.append(now)
+    return True
+
+
+def public_rooms(mode: str, build: str) -> list[dict]:
+    result = []
+    for code, options in ROOM_OPTIONS.items():
+        peers = ROOMS.get(code, {})
+        if not peers:
+            continue
+        owner = next(iter(peers.values()))
+        if owner.mode != mode or owner.build != build:
+            continue
+        result.append({"code": code, "name": options["name"], "mode": owner.mode,
+                       "players": len(peers), "capacity": MAX_ROOM_SIZE,
+                       "locked": bool(options["password_hash"]),
+                       "started": options["started"]})
+    return sorted(result, key=lambda room: (room["started"], room["name"], room["code"]))[:100]
 
 
 def sanitize_room_code(value: str) -> str:
@@ -132,6 +178,13 @@ def http_response(status: int, reason: str, content_type: str, body: bytes) -> R
 
 def process_http_request(_connection: ServerConnection, request: Request) -> Optional[Response]:
     path = request.path.split("?", 1)[0]
+    if path == "/aksoy-tank/rooms":
+        if len(request.path) > 2048:
+            return http_response(400, "Bad Request", "text/plain", b"Query too long")
+        query = parse_qs(urlsplit(request.path).query)
+        rooms = public_rooms(query.get("mode", [""])[0], query.get("build", [""])[0])
+        return http_response(200, "OK", "application/json; charset=utf-8",
+                             json.dumps({"rooms": rooms}, ensure_ascii=True).encode("utf-8"))
     if path == "/aksoy-tank/health":
         return http_response(200, "OK", "application/json; charset=utf-8", b'{"status":"ok"}\n')
     if path == "/aksoy-tank/privacy":
@@ -187,6 +240,7 @@ async def remove_peer(connection: ServerConnection) -> None:
             elif not peers:
                 ROOMS.pop(room_code, None)
                 ROOM_ROUNDS.pop(room_code, None)
+                ROOM_OPTIONS.pop(room_code, None)
             break
     if promoted_peer is not None:
         try:
@@ -205,10 +259,12 @@ async def remove_peer(connection: ServerConnection) -> None:
 
 
 async def join_room(
-    connection: ServerConnection, room_code: str, mode: str, build: str, profile: object
+    connection: ServerConnection, room_code: str, mode: str, build: str, profile: object,
+    action: str = "join", password: object = "", room_name: object = "", resume_token: object = ""
 ) -> Optional[Peer]:
-    matchmaking = not room_code
-    if not matchmaking and len(room_code) < 4:
+    creating = action == "create_room"
+    matchmaking = action == "matchmake" or (action == "join" and not room_code)
+    if not matchmaking and not creating and len(room_code) < 4:
         await send_error(connection, "Oda kodu en az 4 karakter olmali.")
         return None
     if mode not in {"online_coop", "online_vs"}:
@@ -218,7 +274,44 @@ async def join_room(
         await send_error(connection, "Oyun surumu gecersiz.")
         return None
 
+    if not isinstance(password, str) or len(password) > 64:
+        await send_error(connection, "Sifre en fazla 64 karakter olmali.")
+        return None
+    if not isinstance(resume_token, str) or len(resume_token) > 128:
+        await send_error(connection, "Gecersiz oturum anahtari.")
+        return None
+    try:
+        password.encode("utf-8")
+        resume_token.encode("utf-8")
+    except UnicodeEncodeError:
+        await send_error(connection, "Sifre veya oturum anahtari gecersiz.")
+        return None
+    options = None
+    if creating:
+        if not isinstance(room_name, str):
+            await send_error(connection, "Oda adi gecersiz.")
+            return None
+        name = " ".join(room_name.split())
+        name = "".join(c for c in name if c.isalnum() or c in " -_")[:24]
+        if len(name) < 3 or (password and len(password) < 4):
+            await send_error(connection, "Oda adi en az 3, sifre en az 4 karakter olmali.")
+            return None
+        salt = secrets.token_bytes(16)
+        digest = await asyncio.to_thread(hashlib.pbkdf2_hmac, "sha256", password.encode(), salt, 120000) if password else b""
+        options = {"name": name, "salt": salt, "password_hash": digest, "started": False, "tokens": {}}
+    else:
+        protected = ROOM_OPTIONS.get(room_code)
+        if protected and protected["password_hash"]:
+            digest = await asyncio.to_thread(hashlib.pbkdf2_hmac, "sha256", password.encode(), protected["salt"], 120000)
+            if not hmac.compare_digest(digest, protected["password_hash"]):
+                await send_error(connection, "Oda sifresi yanlis.")
+                return None
+
     async with ROOM_LOCK:
+        if creating:
+            room_code = secrets.token_hex(4).upper()
+            while room_code in ROOMS:
+                room_code = secrets.token_hex(4).upper()
         if matchmaking:
             room_code = next(
                 (
@@ -237,12 +330,30 @@ async def join_room(
                     room_code = candidate_code
         room = ROOMS.get(room_code)
         if room is None:
+            if action == "join_room":
+                await send_error(connection, "Oda artik mevcut degil. Listeyi yenile.")
+                return None
             if len(ROOMS) >= MAX_ROOMS:
                 await send_error(connection, "Sunucu kapasitesi dolu. Biraz sonra tekrar dene.")
                 return None
             room = {}
             ROOMS[room_code] = room
             ROOM_ROUNDS[room_code] = 0
+            if options is not None:
+                ROOM_OPTIONS[room_code] = options
+        options = ROOM_OPTIONS.get(room_code)
+        resumed_slot = 0
+        if options and not creating:
+            # Recheck identity after password hashing yielded to the event loop.
+            if protected is not options:
+                await send_error(connection, "Oda degisti. Listeyi yenile.")
+                return None
+            for saved_slot, token in options["tokens"].items():
+                if resume_token and hmac.compare_digest(token.encode(), resume_token.encode()):
+                    resumed_slot = saved_slot
+            if options["started"] and not resumed_slot:
+                await send_error(connection, "Mac basladi. Bu odaya yeni oyuncu alinamaz.")
+                return None
         if len(room) >= MAX_ROOM_SIZE:
             await send_error(connection, "Oda dolu.")
             return None
@@ -259,10 +370,21 @@ async def join_room(
 
         role = "host" if not room else "guest"
         occupied_slots = {item.slot for item in room.values()}
+        if resumed_slot and resumed_slot in occupied_slots:
+            await send_error(connection, "Oyuncu zaten bagli. Biraz sonra tekrar dene.")
+            return None
         slot = next(slot_number for slot_number in (1, 2) if slot_number not in occupied_slots)
+        if resumed_slot:
+            slot = resumed_slot
         peer = Peer(connection, room_code, role, slot, mode, build, sanitize_profile(profile), matchmaking=matchmaking)
         room[connection] = peer
         player_count = len(room)
+        token = ""
+        if options:
+            if not resumed_slot:
+                options["tokens"][slot] = secrets.token_urlsafe(32)
+            token = options["tokens"][slot]
+            options["started"] = options["started"] or player_count == MAX_ROOM_SIZE
 
     await send_json(
         connection,
@@ -275,6 +397,7 @@ async def join_room(
             "player_count": player_count,
             "round_id": ROOM_ROUNDS.get(room_code, 0),
             "profiles": room_profiles(room_code),
+            "resume_token": token,
         },
     )
     await send_room_status(room_code)
@@ -352,16 +475,22 @@ async def handler(connection: ServerConnection) -> None:
                 continue
 
             message_type = str(payload.get("type", ""))
-            if message_type in {"join", "matchmake"}:
+            if message_type in {"join", "matchmake", "create_room", "join_room"}:
                 if current_peer is not None:
                     await send_error(connection, "Baglanti zaten bir odada.")
                     continue
+                if not admit_join(connection):
+                    await send_error(connection, "Cok fazla katilim denemesi. Bir dakika bekle.")
+                    await connection.close(1008, "join limit")
+                    return
                 current_peer = await join_room(
                     connection,
                     "" if message_type == "matchmake" else sanitize_room_code(str(payload.get("room_code", ""))),
                     str(payload.get("mode", "")),
                     str(payload.get("build", "")),
                     payload.get("profile", {}),
+                    action=message_type, password=payload.get("password", ""),
+                    room_name=payload.get("room_name", ""), resume_token=payload.get("resume_token", ""),
                 )
                 continue
 

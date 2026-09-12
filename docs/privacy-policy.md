@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: September 3, 2026
+Last updated: September 12, 2026
 
 This policy explains how Aksoy Tank, provided by Atalay Aksoy, processes data in offline play and the optional online co-op and 1v1 modes.
 
@@ -19,6 +19,8 @@ When online co-op or 1v1 is selected, the game sends the following data to the A
 - gameplay input and live match-state messages
 
 The player name, tank style, and match data required to run the game are sent to the other player in the same room. A real name is not required; players can use a nickname.
+
+Room names, room codes, mode, occupancy and password-required status are visible in the public room directory for the matching game version. Do not put personal information in a room name. Optional room passwords are sent over TLS, verified using salted password hashes held in server memory, and are never included in the public directory. A random per-player reconnection token is held in client and server memory for the room session; it is not saved to device settings. Password hashes and tokens are removed when the room closes. Short-lived IP-based attempt counters limit repeated join requests.
 
 ## Purpose and retention
 

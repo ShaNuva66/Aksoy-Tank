@@ -53,6 +53,7 @@ var _privacy_button: Button
 var _settings_close_button: Button
 var _quick_match_button: Button
 var _mode_buttons: Dictionary = {}
+var _room_browser: Control
 
 
 func _ready() -> void:
@@ -60,6 +61,7 @@ func _ready() -> void:
 	_install_quick_match_button()
 	_apply_black_cat_theme()
 	_install_mobile_navigation()
+	room_code_edit.get_parent().hide()
 	mode_row.visible = GameSession.is_online_available()
 	server_row.visible = false
 	server_url_edit.editable = false
@@ -454,6 +456,8 @@ func _exit_tree() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if is_instance_valid(_room_browser):
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if _settings_overlay.visible:
 			if event.keycode == KEY_ESCAPE:
@@ -483,6 +487,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _on_start_button_pressed() -> void:
+	if is_instance_valid(_room_browser):
+		return
 	if start_button.disabled:
 		return
 	if GameSession.is_online_mode():
@@ -490,12 +496,8 @@ func _on_start_button_pressed() -> void:
 			online_status_label.text = "Oyuncu adı en az 3 karakter olmalı."
 			player_name_edit.grab_focus()
 			return
-		if GameSession.get_room_code().length() < 4:
-			online_status_label.text = "Oda kodu en az 4 karakter olmali."
-			return
-		start_button.disabled = true
-		online_status_label.text = "Sunucuya baglaniliyor..."
-		NetSession.connect_to_room(GameSession.get_server_url(), GameSession.get_room_code(), GameSession.get_session_mode())
+		_room_browser = preload("res://src/scripts/room_browser.gd").new()
+		add_child(_room_browser)
 		return
 
 	get_tree().change_scene_to_file("res://src/scenes/prototype_arena.tscn")
@@ -618,9 +620,9 @@ func _refresh_stage_info() -> void:
 	previous_mode_button.disabled = not GameSession.is_online_available() or GameSession.get_session_mode() == "solo"
 	next_mode_button.disabled = not GameSession.is_online_available() or GameSession.get_session_mode() == "online_vs"
 	if GameSession.is_online_vs():
-		start_button.text = "1V1 ODASINA GIR"
+		start_button.text = "VS ODALARI"
 	elif GameSession.is_online_coop():
-		start_button.text = "CO-OP ODASINA GIR"
+		start_button.text = "CO-OP ODALARI"
 	else:
 		start_button.text = "OPERASYONU BASLAT"
 	var busy := GameSession.is_online_mode() and NetSession.get_status() in [NetSession.STATUS_CONNECTING, NetSession.STATUS_JOINING, NetSession.STATUS_RECONNECTING]

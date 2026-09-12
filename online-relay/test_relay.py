@@ -56,6 +56,8 @@ class RelayIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         server.ROOMS.clear()
         server.ROOM_ROUNDS.clear()
+        server.ROOM_OPTIONS.clear()
+        server.JOIN_ATTEMPTS.clear()
         self.relay = await serve(
             server.handler,
             "127.0.0.1",
@@ -81,6 +83,79 @@ class RelayIntegrationTests(unittest.IsolatedAsyncioTestCase):
         socket = await connect(self.url, compression=None)
         self.connections.append(socket)
         return socket
+
+    async def browser(self, socket, action="create_room", expected="room_joined", **extra):
+        await socket.send(json.dumps({"type": action, "mode": "online_vs", "build": "2.0.6",
+                                      "room_name": "Test Odasi", "profile": {"name": "Test"}, **extra}))
+        return await receive_type(socket, expected)
+
+    async def test_browser_password_listing_and_resume(self):
+        host = await self.open()
+        created = await self.browser(host, password="test-secret")
+        code = created["room_code"]
+        rooms = server.public_rooms("online_vs", "2.0.6")
+        self.assertEqual(len(rooms), 1)
+        self.assertTrue(rooms[0]["locked"])
+        self.assertFalse(rooms[0]["started"])
+        self.assertNotIn("test-secret", json.dumps(rooms))
+        self.assertNotIn(created["resume_token"], json.dumps(rooms))
+        self.assertEqual(server.public_rooms("online_coop", "2.0.6"), [])
+        self.assertEqual(server.public_rooms("online_vs", "2.0.5"), [])
+        intruder = await self.open()
+        error = await self.browser(intruder, "join", "error", room_code=code)
+        self.assertIn("sifresi yanlis", error["message"])
+        guest = await self.open()
+        joined = await self.browser(guest, "join_room", room_code=code, password="test-secret")
+        self.assertTrue(server.public_rooms("online_vs", "2.0.6")[0]["started"])
+        self.assertNotEqual(created["resume_token"], joined["resume_token"])
+        await guest.close()
+        await asyncio.sleep(0.05)
+        error = await self.browser(intruder, "join_room", "error", room_code=code, password="test-secret")
+        self.assertIn("Mac basladi", error["message"])
+        resumed = await self.open()
+        reply = await self.browser(resumed, "join_room", room_code=code, password="test-secret", resume_token=joined["resume_token"])
+        self.assertEqual(reply["slot"], joined["slot"])
+        self.assertEqual(reply["resume_token"], joined["resume_token"])
+        await resumed.close()
+        await host.close()
+        await asyncio.sleep(0.05)
+        self.assertNotIn(code, server.ROOM_OPTIONS)
+        error = await self.browser(intruder, "join_room", "error", room_code=code)
+        self.assertIn("mevcut degil", error["message"])
+
+    async def test_browser_open_room_http_and_capacity(self):
+        host = await self.open()
+        created = await self.browser(host)
+        url = self.http_base + "/aksoy-tank/rooms?mode=online_vs&build=2.0.6"
+        body = await asyncio.to_thread(lambda: urllib.request.urlopen(url).read())
+        listed = json.loads(body)["rooms"]
+        self.assertEqual(listed[0]["code"], created["room_code"])
+        self.assertFalse(listed[0]["locked"])
+        guest = await self.open()
+        await self.browser(guest, "join_room", room_code=created["room_code"])
+        third = await self.open()
+        await self.browser(third, "join_room", "error", room_code=created["room_code"])
+        self.assertEqual(len(server.ROOMS[created["room_code"]]), 2)
+
+    async def test_browser_validation_and_join_throttle(self):
+        socket = await self.open()
+        for extra in ({"password": "abc"}, {"password": "a" * 65}, {"password": {}},
+                      {"room_name": "x"}, {"room_name": None}, {"mode": "bad"},
+                      {"password": "\ud800"}, {"resume_token": "\ud800"}):
+            await self.browser(socket, expected="error", **extra)
+        self.assertEqual(server.ROOM_OPTIONS, {})
+        now = server.time.monotonic()
+        server.JOIN_ATTEMPTS["127.0.0.1"] = server.deque([now] * 60)
+        error = await self.browser(socket, expected="error")
+        self.assertIn("bir dakika", error["message"].lower())
+
+    async def test_browser_missing_code_does_not_matchmake(self):
+        host = await self.open()
+        created = await matchmake(host, build="2.0.6")
+        guest = await self.open()
+        error = await self.browser(guest, "join_room", "error", room_code="")
+        self.assertIn("Oda kodu", error["message"])
+        self.assertEqual(len(server.ROOMS[created["room_code"]]), 1)
 
     async def test_two_players_relay_input_and_disconnect(self):
         host = await self.open()

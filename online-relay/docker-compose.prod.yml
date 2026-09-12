@@ -7,6 +7,7 @@ services:
       AKSOY_TANK_RELAY_HOST: 0.0.0.0
       AKSOY_TANK_RELAY_PORT: 8765
       AKSOY_TANK_ALLOWED_PATHS: /aksoy-tank/ws
+      AKSOY_TANK_TRUSTED_PROXY_CIDR: 172.18.0.0/16
     expose:
       - "8765"
     networks:

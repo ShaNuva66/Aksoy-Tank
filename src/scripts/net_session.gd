@@ -55,6 +55,7 @@ var _reconnect_wait := 0.0
 var _joined_once := false
 var _matchmaking := false
 var _joined_via_matchmaking := false
+var _room_request: Dictionary = {}
 
 
 func _ready() -> void:
@@ -92,6 +93,7 @@ func _process(delta: float) -> void:
 			}
 			if not _matchmaking:
 				join_payload["room_code"] = _pending_room_code
+			join_payload.merge(_room_request, true)
 			_send_json(join_payload)
 			if _socket == null:
 				return
@@ -148,6 +150,11 @@ func connect_matchmaking(server_url: String, mode: String = "online_coop") -> vo
 	_reconnect_attempt = 0
 	_joined_once = false
 	_open_socket_connection(false)
+
+
+func connect_browser_room(server_url: String, mode: String, code: String, password: String, room_name: String = "") -> void:
+	connect_to_room(server_url, code, mode)
+	_room_request = {"type": "create_room" if code.is_empty() else "join_room", "password": password, "room_name": room_name}
 
 
 func _open_socket_connection(reconnecting: bool) -> void:
@@ -316,6 +323,9 @@ func _handle_message(payload_text: String) -> void:
 		_flush_snapshot_notification()
 	match String(message.get("type", "")):
 		"room_joined":
+			if not _room_request.is_empty():
+				_room_request["type"] = "join_room"
+				_room_request["resume_token"] = String(message.get("resume_token", ""))
 			_joined_via_matchmaking = _joined_via_matchmaking or _matchmaking
 			_role = String(message.get("role", "guest"))
 			_local_slot = int(message.get("slot", 1))
@@ -433,6 +443,7 @@ func _flush_snapshot_notification() -> void:
 
 
 func _reset_connection_state() -> void:
+	_room_request.clear()
 	vs_series.clear()
 	_snapshot_notification_pending = false
 	_pending_room_code = ""

@@ -7,13 +7,13 @@ $outputAabPath = Join-Path $outputDir "aksoy-tank-release.aab"
 $outputManifestPath = Join-Path $outputDir "aksoy-tank-release-AndroidManifest.xml"
 $outputApkPath = Join-Path $outputDir "aksoy-tank-debug.apk"
 $releaseNotesSource = Join-Path $projectRoot "docs\play-store-guncelleme-notlari.md"
-$releaseNotesOutput = Join-Path $outputDir "guncelleme-notlari-2.0.5.txt"
+$releaseNotesOutput = Join-Path $outputDir "guncelleme-notlari-2.0.6.txt"
 $releaseNotesTrSource = Join-Path $projectRoot "docs\release-notes-tr-TR.txt"
 $releaseNotesEnSource = Join-Path $projectRoot "docs\release-notes-en-US.txt"
-$desktopOutputAab = Join-Path ([Environment]::GetFolderPath("Desktop")) "Aksoy-Tank-2.0.5-Play-Store.aab"
-$desktopReleaseNotes = Join-Path ([Environment]::GetFolderPath("Desktop")) "Aksoy-Tank-2.0.5-Guncelleme-Notlari.txt"
-$desktopReleaseNotesTr = Join-Path ([Environment]::GetFolderPath("Desktop")) "Aksoy-Tank-2.0.5-Play-Notu-tr-TR.txt"
-$desktopReleaseNotesEn = Join-Path ([Environment]::GetFolderPath("Desktop")) "Aksoy-Tank-2.0.5-Play-Notu-en-US.txt"
+$desktopOutputAab = Join-Path ([Environment]::GetFolderPath("Desktop")) "Aksoy-Tank-2.0.6-Play-Store.aab"
+$desktopReleaseNotes = Join-Path ([Environment]::GetFolderPath("Desktop")) "Aksoy-Tank-2.0.6-Guncelleme-Notlari.txt"
+$desktopReleaseNotesTr = Join-Path ([Environment]::GetFolderPath("Desktop")) "Aksoy-Tank-2.0.6-Play-Notu-tr-TR.txt"
+$desktopReleaseNotesEn = Join-Path ([Environment]::GetFolderPath("Desktop")) "Aksoy-Tank-2.0.6-Play-Notu-en-US.txt"
 
 function Get-GodotExecutable {
 	$candidates = @(
@@ -91,7 +91,7 @@ function Test-AndroidPackageMetadata {
 
 	$badging = (& $aaptExe dump badging $ApkPath) -join "`n"
 	if ($LASTEXITCODE -ne 0) { throw "APK manifest bilgisi okunamadi." }
-	if ($badging -notmatch "package: name='com\.atalay\.aksoytank' versionCode='27' versionName='2\.0\.5'") {
+	if ($badging -notmatch "package: name='com\.atalay\.aksoytank' versionCode='28' versionName='2\.0\.6'") {
 		throw "APK paket veya surum bilgisi beklenen degerde degil."
 	}
 	if ($badging -notmatch "sdkVersion:'24'") { throw "APK minimum SDK 24 degil." }
@@ -119,7 +119,7 @@ function Test-AabManifestMetadata {
 	if (-not (Test-Path $ManifestPath)) { throw "AAB release manifesti bulunamadi: $ManifestPath" }
 	$manifest = Get-Content $ManifestPath -Raw
 	if ($manifest -notmatch 'package="com\.atalay\.aksoytank"') { throw "AAB paket adi hatali." }
-	if ($manifest -notmatch 'android:versionCode="27"' -or $manifest -notmatch 'android:versionName="2\.0\.5"') {
+	if ($manifest -notmatch 'android:versionCode="28"' -or $manifest -notmatch 'android:versionName="2\.0\.6"') {
 		throw "AAB surum bilgisi hatali."
 	}
 	if ($manifest -notmatch 'android:minSdkVersion="24"' -or $manifest -notmatch 'android:targetSdkVersion="36"') {
@@ -187,6 +187,8 @@ try {
 	}
 
 	Invoke-Step "Mobil kontrol smoke testi" {
+		& $godotExe --headless --path $projectRoot --script res://tools/room_browser_test.gd
+		if ($LASTEXITCODE -ne 0) { throw "Oda tarayicisi testi basarisiz." }
 		& $godotExe --headless --path $projectRoot --script res://tools/floating_analog_test.gd
 		if ($LASTEXITCODE -ne 0) { throw "Kayan analog testi basarisiz." }
 		& $godotExe --headless --path $projectRoot --script res://tools/mobile_touch_smoke_test.gd
@@ -224,7 +226,7 @@ try {
 		& (Join-Path $projectRoot "tools\run_combat_soak.ps1")
 		& python (Join-Path $projectRoot "online-relay\test_game_clients.py") --godot $godotExe
 		if ($LASTEXITCODE -ne 0) { throw "Iki istemcili kesinti testi basarisiz." }
-		& python (Join-Path $projectRoot "online-relay\test_game_clients.py") --godot $godotExe --impaired
+		& python (Join-Path $projectRoot "online-relay\test_game_clients.py") --godot $godotExe --impaired --browser
 		if ($LASTEXITCODE -ne 0) { throw "Zayif baglanti testi basarisiz." }
 		& (Join-Path $projectRoot "tools\export_android.ps1")
 		if ($LASTEXITCODE -ne 0) { throw "Android export basarisiz." }
