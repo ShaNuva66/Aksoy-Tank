@@ -213,13 +213,18 @@ func _audit_vs_stage() -> void:
 	arena._result_is_draw = false
 	arena._elimination_text = "Rakip, Ali Atalay'ın tankı tarafından ezildi!"
 	_require(arena._configure_local_vs_result(), "Local winner was not recognized")
-	_require(String(arena.result_title.text).contains("ZAFERDE"), "Winner result is not motivational")
-	_require(String(arena.result_subtitle.text).contains("tarafından ezildi"), "Competitive elimination copy is missing")
+	_require(String(arena.result_title.text) == "RAUND SENIN", "Winner round result is incorrect")
+	_require(String(arena.result_subtitle.text).contains("HEDEF 3"), "Series target is missing from the result")
 	arena._winner_slot = 2
 	_require(not arena._configure_local_vs_result(), "Local loser was incorrectly marked as winner")
-	_require(String(arena.result_title.text).contains("ARENAYI ALDI"), "Loser result is not personalized")
+	_require(String(arena.result_title.text) == "RAUND KAYBEDILDI", "Loser round result is incorrect")
 	arena._winner_slot = 1
+	arena._capture_requested = true
 	arena._finish_match(true, "Ali Atalay Arenayı Ezdi", arena._elimination_text)
+	_require(int(arena._vs_series.get("p1", 0)) == 1, "Round victory did not update the series score")
+	arena._finish_match(true, "Duplicate result", "")
+	_require(int(arena._vs_series.get("p1", 0)) == 1, "Duplicate result counted the victory twice")
+	arena._capture_requested = false
 	await create_timer(0.8).timeout
 	_require(arena.result_overlay.visible and result_fx.visible, "Winner animation did not become visible")
 	_require(not arena.retry_button.disabled, "Result actions did not unlock after animation")

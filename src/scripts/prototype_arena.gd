@@ -1,6 +1,7 @@
 extends Node2D
 
 const STAGE_CATALOG := preload("res://src/scripts/stage_catalog.gd")
+const VS_RULES := preload("res://src/scripts/vs_rules.gd")
 const PLAYER_TANK_SCENE := preload("res://src/scenes/player_tank.tscn")
 const ENEMY_TANK_SCENE := preload("res://src/scenes/enemy_tank.tscn")
 const BULLET_SCENE := preload("res://src/scenes/bullet.tscn")
@@ -134,6 +135,8 @@ var _online_start_remaining := -1.0
 var _online_ready_token := 0
 var _online_countdown_number := -1
 var _online_countdown_label: Label = null
+var _lobby_label: Label = null
+var _story_button: Button = null
 var _online_countdown_tween: Tween = null
 var _paused := false
 var _previous_quit_on_go_back := true
@@ -156,6 +159,7 @@ var _last_sent_wall_revision := -1
 var _last_applied_wall_revision := -1
 var _network_hud_timer := 0.0
 var _winner_slot := 0
+var _vs_series: Dictionary = {}
 var _result_is_draw := false
 var _result_animation_played := false
 var _elimination_text := ""
@@ -194,6 +198,11 @@ func _ready() -> void:
 		GameSession.selected_stage_index = host_stage
 		_stage_data = GameSession.get_selected_stage()
 	_theme_palette = STAGE_CATALOG.get_theme(_stage_data.get("theme", "dust"))
+	if _is_vs_mode():
+		_vs_series = NetSession.vs_series.duplicate(true) if not NetSession.vs_series.is_empty() else VS_RULES.fresh()
+		var layout := VS_RULES.layout(int(_vs_series.get("round", 1)))
+		_stage_data = _stage_data.duplicate(true)
+		_stage_data.merge(layout, true)
 	_combat_balance = _build_combat_balance()
 	_player_spawn_cells = _build_player_spawn_cells()
 	_enemy_queue = _build_enemy_queue()
@@ -271,6 +280,8 @@ func _exit_tree() -> void:
 
 
 func _process(delta: float) -> void:
+	if _lobby_label:
+		_lobby_label.visible = _waiting_for_peer and _online_start_remaining < 0.0 and not _paused and not _match_over
 	_update_shield_hud(delta)
 	if _is_online_mode():
 		_network_hud_timer = maxf(_network_hud_timer - delta, 0.0)
@@ -442,7 +453,7 @@ func _configure_players() -> void:
 			add_child(player_node)
 
 		player_node.position = _cell_to_world(_player_spawn_cells[slot - 1])
-		player_node.rotation = 0.0
+		player_node.rotation = PI if _is_vs_mode() and _player_spawn_cells[slot - 1].y < GRID_SIZE.y / 2 else 0.0
 		player_node.reset_physics_interpolation()
 		player_node.configure_player(player_profile)
 		player_node.set_mobile_controls(mobile_controls)
@@ -517,6 +528,38 @@ func _install_pause_input_proxy() -> void:
 
 
 func _install_game_feel_ui() -> void:
+	pause_button.offset_left = -94
+	pause_button.offset_right = -14
+	pause_button.offset_top = 12
+	pause_button.offset_bottom = 92
+	pause_button.add_theme_font_size_override("font_size", 30)
+	shield_hud.offset_top = 104
+	shield_hud.offset_bottom = 152
+	_story_button = Button.new()
+	_story_button.name = "StoryButton"
+	_story_button.text = "HIKAYEYE DON"
+	_story_button.custom_minimum_size = Vector2(0, 64)
+	_story_button.process_mode = Node.PROCESS_MODE_ALWAYS
+	BlackCatTheme.apply_button(_story_button, BlackCatTheme.ACCENT, BlackCatTheme.SURFACE)
+	pause_menu_button.get_parent().add_child(_story_button)
+	_story_button.pressed.connect(_return_to_story)
+	_story_button.visible = _is_online_mode()
+	if _is_online_mode():
+		_lobby_label = Label.new()
+		_lobby_label.name = "LobbyPlayers"
+		_lobby_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_lobby_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_lobby_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_lobby_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_lobby_label.add_theme_font_size_override("font_size", 24)
+		_lobby_label.add_theme_color_override("font_outline_color", Color.BLACK)
+		_lobby_label.add_theme_constant_override("outline_size", 8)
+		hud.add_child(_lobby_label)
+		_lobby_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+		_lobby_label.offset_left = -300
+		_lobby_label.offset_right = 300
+		_lobby_label.offset_top = -80
+		_lobby_label.offset_bottom = 80
 	header_backdrop.visible = false
 	header.visible = true
 	shield_backdrop.visible = false
@@ -834,18 +877,8 @@ func _on_player_destroyed(slot: int) -> void:
 
 	var remaining_players := get_active_player_targets()
 	if _is_vs_mode():
-		if remaining_players.is_empty():
-			_winner_slot = 0
-			_result_is_draw = true
-			_elimination_text = "İki tank da aynı anda hurdaya döndü. Arena yeni raundu bekliyor!"
-			_finish_match(false, "Berabere", _elimination_text)
-		else:
-			var winner = remaining_players[0]
-			_winner_slot = int(winner.player_slot)
-			_result_is_draw = false
-			var winner_name := String(winner.get_callsign())
-			_elimination_text = "%s, %s tankı tarafından ezildi!" % [defeated_name, _possessive_name(winner_name)]
-			_finish_match(_winner_slot == _local_player_slot, "%s Arenayı Ezdi!" % winner_name, _elimination_text)
+		# Resolve after all collision callbacks so a simultaneous knockout is a draw.
+		call_deferred("_resolve_vs_elimination", defeated_name)
 		return
 
 	if remaining_players.is_empty():
@@ -853,6 +886,16 @@ func _on_player_destroyed(slot: int) -> void:
 		return
 
 	_show_alert("P%d sahadan dustu. Diger tank savunmaya devam ediyor." % slot, Color("#ff9e8b"))
+
+
+func _resolve_vs_elimination(defeated_name: String) -> void:
+	if _match_over or not _is_authority():
+		return
+	var remaining := get_active_player_targets()
+	_result_is_draw = remaining.is_empty()
+	_winner_slot = 0 if remaining.is_empty() else int(remaining[0].player_slot)
+	_elimination_text = "Iki tank da dustu." if _result_is_draw else defeated_name + " sahadan dustu."
+	_finish_match(_winner_slot == _local_player_slot, "Raund tamamlandi", _elimination_text)
 
 
 func _on_player_health_changed(current_health: int, max_health: int, slot: int) -> void:
@@ -891,6 +934,9 @@ func _finish_match(player_won: bool, title: String, subtitle: String) -> void:
 		_set_pause_state(false)
 
 	_match_over = true
+	if _is_vs_mode() and _is_authority():
+		_vs_series = VS_RULES.finish(_vs_series, 0 if _result_is_draw else _winner_slot)
+		NetSession.vs_series = _vs_series.duplicate(true)
 	var unlocked_new_stage := false
 	if player_won and not _is_online_mode() and not _is_vs_mode():
 		unlocked_new_stage = GameSession.mark_stage_completed(_stage_data.get("index", 0))
@@ -921,6 +967,23 @@ func _finish_match(player_won: bool, title: String, subtitle: String) -> void:
 
 
 func _configure_local_vs_result() -> bool:
+	var won := _configure_single_vs_result()
+	var champion := int(_vs_series.get("winner", 0))
+	if champion > 0:
+		result_title.text = "MAC SENIN" if champion == _local_player_slot else "MAC TAMAMLANDI"
+	else:
+		result_title.text = "RAUND BERABERE" if _result_is_draw else ("RAUND SENIN" if won else "RAUND KAYBEDILDI")
+	result_subtitle.text = _vs_score_text()
+	retry_button.text = "ROVANS" if champion > 0 else "SONRAKI RAUND"
+	wave_label.text = _build_wave_progress_text()
+	return won
+
+
+func _vs_score_text() -> String:
+	return "P1  %d - %d  P2 | RAUND %d | HEDEF %d" % [int(_vs_series.get("p1", 0)), int(_vs_series.get("p2", 0)), int(_vs_series.get("round", 1)), VS_RULES.WINS_REQUIRED]
+
+
+func _configure_single_vs_result() -> bool:
 	if _result_is_draw or _winner_slot <= 0:
 		_status_text = "Berabere"
 		result_title.text = "BERABERE"
@@ -1061,6 +1124,10 @@ func _update_hud() -> void:
 
 
 func _update_network_info_label() -> void:
+	if _lobby_label:
+		var remote_slot := 2 if _local_player_slot == 1 else 1
+		var peer_name := _player_name_for_slot(remote_slot) if NetSession.is_peer_connected() else "Oyuncu bekleniyor"
+		_lobby_label.text = "LOBI %d/2 | ODA %s\n%s\n%s" % [2 if NetSession.is_peer_connected() else 1, GameSession.get_room_code(), _player_name_for_slot(_local_player_slot), peer_name]
 	var network_suffix := ""
 	if _is_online_mode():
 		network_suffix = " | ODA %s | %s" % [GameSession.get_room_code(), NetSession.get_network_quality_text()]
@@ -1134,17 +1201,19 @@ func _update_rematch_ui() -> void:
 	var local_ready := _rematch_ready_slots.has(_local_player_slot)
 	var remote_slot := 2 if _local_player_slot == 1 else 1
 	var remote_ready := _rematch_ready_slots.has(remote_slot)
+	var action := "ROVANS" if int(_vs_series.get("winner", 0)) > 0 else "SONRAKI RAUND"
+	result_subtitle.text = "%s\nONAY %d/2" % [_vs_score_text(), ready_count]
 	if ready_count >= 2:
-		result_subtitle.text = "Rövanş onayı 2/2 • Yeni raund başlıyor..."
-		retry_button.text = "RAUND BAŞLIYOR"
+		retry_button.text = "BASLIYOR"
 		retry_button.disabled = true
 	elif local_ready:
-		result_subtitle.text = "Rövanş onayı 1/2 • Rakibin onayı bekleniyor."
-		retry_button.text = "ONAY VERİLDİ • BEKLENİYOR"
+		retry_button.text = "RAKIP BEKLENIYOR"
 		retry_button.disabled = true
 	elif remote_ready:
-		result_subtitle.text = "Rakip rövanşa hazır • Başlamak için sen de onayla."
-		retry_button.text = "RÖVANŞI ONAYLA"
+		retry_button.text = action + " ONAYLA"
+		retry_button.disabled = false
+	else:
+		retry_button.text = action
 		retry_button.disabled = false
 
 
@@ -1156,6 +1225,8 @@ func _begin_synchronized_rematch() -> void:
 	retry_button.text = "RAUND BAŞLIYOR"
 	result_subtitle.text = "Rövanş onayı 2/2 • Yeni raund başlıyor..."
 	NetSession.clear_match_buffers()
+	if _is_vs_mode():
+		NetSession.vs_series = VS_RULES.advance(_vs_series)
 	if not _is_vs_mode() and next_stage_button.visible:
 		GameSession.selected_stage_index = mini(int(_stage_data.get("index", 0)) + 1, GameSession.get_stage_count() - 1)
 	call_deferred("_change_to_arena")
@@ -1179,6 +1250,11 @@ func _go_to_next_stage() -> void:
 		_set_pause_state(false)
 	if GameSession.advance_to_next_stage():
 		get_tree().change_scene_to_file("res://src/scenes/prototype_arena.tscn")
+
+
+func _return_to_story() -> void:
+	GameSession.set_session_mode("solo")
+	_go_to_main_menu()
 
 
 func _go_to_main_menu() -> void:
@@ -1751,7 +1827,10 @@ func _build_player_spawn_cells() -> Array[Vector2i]:
 	if _player_count <= 1:
 		return [anchor_cell]
 	if _is_vs_mode():
-		return [Vector2i(5, 12), Vector2i(20, 2)]
+		var spawns: Array[Vector2i] = [Vector2i(5, 12), Vector2i(20, 2)]
+		if int(_vs_series.get("round", 1)) % 2 == 0:
+			spawns.reverse()
+		return spawns
 	return [anchor_cell + Vector2i(-2, 0), anchor_cell + Vector2i(2, 0)]
 
 
@@ -1806,7 +1885,7 @@ func _build_stage_brief() -> String:
 
 func _build_objective_progress_text() -> String:
 	if _is_vs_mode():
-		return "P1  VS  P2"
+		return _vs_score_text()
 	var remaining := _total_enemies - _spawned_enemies + _alive_enemies
 
 	if _objective_type == "command_hunt":
@@ -2081,7 +2160,8 @@ func _on_online_snapshot_updated() -> void:
 		return
 	var meta: Dictionary = snapshot.get("meta", {})
 	var host_stage := clampi(int(meta.get("stage_index", _stage_data.get("index", 0))), 0, GameSession.get_stage_count() - 1)
-	if host_stage != int(_stage_data.get("index", 0)):
+	var series_round := int(Dictionary(meta.get("vs_series", {})).get("round", _vs_series.get("round", 1)))
+	if host_stage != int(_stage_data.get("index", 0)) or (_is_vs_mode() and series_round != int(_vs_series.get("round", 1))):
 		if not _stage_sync_pending:
 			_stage_sync_pending = true
 			GameSession.selected_stage_index = host_stage
@@ -2107,6 +2187,7 @@ func _build_world_snapshot() -> Dictionary:
 		"walls_changed": walls_changed,
 		"walls_revision": _wall_revision,
 		"meta": {
+			"vs_series": _vs_series.duplicate(true),
 			"ready_token": _online_ready_token,
 			"start_remaining": _online_start_remaining,
 			"round_id": NetSession._round_id if _is_online_mode() else 0,
@@ -2322,6 +2403,9 @@ func _apply_wall_snapshot(walls: Array) -> void:
 
 func _apply_meta_snapshot(meta: Dictionary) -> void:
 	var was_match_over := _match_over
+	if _is_vs_mode() and meta.get("vs_series") is Dictionary:
+		_vs_series = Dictionary(meta["vs_series"]).duplicate(true)
+		NetSession.vs_series = _vs_series.duplicate(true)
 	_online_ready_token = int(meta.get("ready_token", _online_ready_token))
 	_online_start_remaining = float(meta.get("start_remaining", _online_start_remaining))
 	if _is_online_mode() and not _is_authority():

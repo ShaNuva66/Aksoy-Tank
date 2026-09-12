@@ -153,6 +153,7 @@ func configure_player(profile: Dictionary) -> void:
 	_fire_cooldown_scale = maxf(float(profile.get("fire_cooldown_scale", 1.0)), 0.45)
 	_grant_shield(float(profile.get("spawn_shield_duration", 0.0)))
 	apply_cosmetic_profile(profile)
+	_update_nameplate_transform()
 	health_changed.emit(health, max_health)
 	queue_redraw()
 

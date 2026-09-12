@@ -52,12 +52,14 @@ var _reduced_motion_toggle: CheckButton
 var _privacy_button: Button
 var _settings_close_button: Button
 var _quick_match_button: Button
+var _mode_buttons: Dictionary = {}
 
 
 func _ready() -> void:
 	_install_settings_ui()
 	_install_quick_match_button()
 	_apply_black_cat_theme()
+	_install_mobile_navigation()
 	mode_row.visible = GameSession.is_online_available()
 	server_row.visible = false
 	server_url_edit.editable = false
@@ -112,6 +114,51 @@ func _apply_black_cat_theme() -> void:
 	BlackCatTheme.apply_line_edit(player_name_edit)
 	BlackCatTheme.apply_line_edit(server_url_edit)
 	_settings_panel.add_theme_stylebox_override("panel", BlackCatTheme.make_panel_style(BlackCatTheme.SURFACE_ALT, BlackCatTheme.border_mix(BlackCatTheme.SURFACE_ALT, BlackCatTheme.ACCENT, 0.3), 8, 2))
+
+
+func _install_mobile_navigation() -> void:
+	previous_mode_button.hide()
+	next_mode_button.hide()
+	session_mode_label.hide()
+	var group := ButtonGroup.new()
+	for mode in ["solo", "online_coop", "online_vs"]:
+		var button := Button.new()
+		button.text = {"solo": "HIKAYE", "online_coop": "CO-OP", "online_vs": "VS"}[mode]
+		button.toggle_mode = true
+		button.button_group = group
+		button.custom_minimum_size = Vector2(144, 64)
+		button.add_theme_font_size_override("font_size", 24)
+		BlackCatTheme.apply_button(button, BlackCatTheme.ACCENT, BlackCatTheme.SURFACE)
+		button.pressed.connect(_select_mode.bind(mode))
+		mode_row.add_child(button)
+		_mode_buttons[mode] = button
+	for button in [previous_stage_button, next_stage_button, previous_style_button, next_style_button]:
+		button.custom_minimum_size = Vector2(72, 64)
+		button.add_theme_font_size_override("font_size", 26)
+	for control in [room_code_edit, player_name_edit]:
+		control.custom_minimum_size.y = 58
+		control.add_theme_font_size_override("font_size", 24)
+	_quick_match_button.custom_minimum_size.y = 64
+	_quick_match_button.add_theme_font_size_override("font_size", 24)
+	_settings_button.custom_minimum_size = Vector2(140, 64)
+	_settings_button.offset_bottom = 82
+	_settings_button.add_theme_font_size_override("font_size", 24)
+	start_button.custom_minimum_size.y = 72
+	$CenterContainer.offset_top = 88
+	$CenterContainer.offset_bottom = -44
+	title_label.add_theme_font_size_override("font_size", 34)
+	subtitle_label.hide()
+	menu_panel.custom_minimum_size.x = 780
+	var margin := $CenterContainer/Panel/Margin
+	margin.add_theme_constant_override("margin_top", 20)
+	margin.add_theme_constant_override("margin_bottom", 20)
+	$CenterContainer/Panel/Margin/VBox.add_theme_constant_override("separation", 12)
+
+
+func _select_mode(mode: String) -> void:
+	NetSession.disconnect_session()
+	GameSession.set_session_mode(mode)
+	_refresh_stage_info()
 
 
 func _start_menu_animations() -> void:
@@ -542,6 +589,8 @@ func _on_room_joined(joined_room_code: String, _role: String, _slot: int) -> voi
 
 
 func _refresh_stage_info() -> void:
+	for mode in _mode_buttons:
+		_mode_buttons[mode].set_pressed_no_signal(mode == GameSession.get_session_mode())
 	var stage: Dictionary = GameSession.get_selected_stage()
 	var unlocked_count := GameSession.get_unlocked_stage_count()
 

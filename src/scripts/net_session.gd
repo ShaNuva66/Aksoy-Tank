@@ -39,6 +39,7 @@ var _remote_inputs := {}
 var _remote_input_times := {}
 var _ever_paired := false
 var _round_id := 0
+var vs_series: Dictionary = {}
 var _polling_packets := false
 var _snapshot_notification_pending := false
 var _connection_elapsed := 0.0
@@ -376,6 +377,9 @@ func _handle_message(payload_text: String) -> void:
 				incoming["walls"] = _latest_snapshot["walls"]
 				incoming["walls_changed"] = bool(_latest_snapshot.get("walls_changed", false))
 			_latest_snapshot = incoming
+			var series = Dictionary(incoming.get("meta", {})).get("vs_series", {})
+			if series is Dictionary and not series.is_empty():
+				vs_series = series.duplicate(true)
 			_snapshot_notification_pending = true
 			if not _polling_packets:
 				_flush_snapshot_notification()
@@ -429,6 +433,7 @@ func _flush_snapshot_notification() -> void:
 
 
 func _reset_connection_state() -> void:
+	vs_series.clear()
 	_snapshot_notification_pending = false
 	_pending_room_code = ""
 	_pending_server_url = ""

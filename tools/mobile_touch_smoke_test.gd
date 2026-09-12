@@ -4,6 +4,7 @@ const MAIN_MENU_SCENE := "res://src/scenes/main_menu.tscn"
 const ARENA_SCENE := "res://src/scenes/prototype_arena.tscn"
 
 var _failed := false
+var _old_mode := "solo"
 
 
 func _init() -> void:
@@ -11,6 +12,8 @@ func _init() -> void:
 
 
 func _run() -> void:
+	_old_mode = root.get_node("GameSession").session_mode
+	root.get_node("GameSession").session_mode = "solo"
 	print("SMOKE: mobile touch flow started")
 	await _load_scene(MAIN_MENU_SCENE)
 	await _wait_frames(4)
@@ -82,6 +85,7 @@ func _run() -> void:
 
 	if not _failed:
 		print("SMOKE: PASS")
+	root.get_node("GameSession").session_mode = _old_mode
 	quit(0 if not _failed else 1)
 
 

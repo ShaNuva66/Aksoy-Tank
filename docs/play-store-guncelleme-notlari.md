@@ -2,6 +2,17 @@
 
 ## tr-TR
 
+Aksoy Tank 2.0.5 (surum kodu 27):
+
+- Ilk dokunusu merkez alan kayan analog, bagimsiz coklu dokunusla ates ve odak kaybinda temizlenen kontroller.
+- Buyuk menu dugmeleri ve dogrudan Hikaye, Co-op, VS secimi.
+- Online lobide oyuncular, ortak geri sayim ve mac menusunden Hikaye'ye donus.
+- VS icin uc galibiyetlik seri, uc simetrik harita, skorun yeniden baglanmada korunmasi ve iki onayli rovans.
+- Geri sayim sirasinda tank adinin ters gorunmesi duzeltildi.
+- Hikayede duraklatma oyunu durdurur; online menu diger oyuncunun oyununu durdurmaz.
+
+Onceki surum notlari:
+
 Aksoy Tank 2.0.4:
 
 - Online maçlar iki oyuncunun arenası hazır olana kadar bekler; ortak 3 saniyelik geri sayımla başlar.

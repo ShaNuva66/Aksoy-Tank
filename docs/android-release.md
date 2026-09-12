@@ -26,8 +26,8 @@ Bu script sunlari yapar:
 
 - `C:\Users\atala\Desktop\Masaustu\aksoy-tank-builds\aksoy-tank-debug.apk`
 - `C:\Users\atala\Desktop\Masaustu\aksoy-tank-builds\aksoy-tank-release.aab`
-- `C:\Users\atala\Desktop\Masaustu\aksoy-tank-builds\guncelleme-notlari-2.0.4.txt`
-- `C:\Users\atala\Desktop\Aksoy-Tank-2.0.4-Play-Store.aab`
+- `C:\Users\atala\Desktop\Masaustu\aksoy-tank-builds\guncelleme-notlari-2.0.5.txt`
+- `C:\Users\atala\Desktop\Aksoy-Tank-2.0.5-Play-Store.aab`
 - `assets/store/listing/screenshots/*.png`
 
 ## Ayrik Scriptler
@@ -61,8 +61,8 @@ Su dosyalar `git` disinda tutulur:
 
 - Oyun adi: `Aksoy Tank`
 - Paket adi: `com.atalay.aksoytank`
-- Surum adi: `2.0.4`
-- Surum kodu: `26`
+- Surum adi: `2.0.5`
+- Surum kodu: `27`
 - Online co-op ve 1V1 sunucusu: `wss://atify.com.tr/aksoy-tank/ws`
 - Minimum Android: `7.0 / API 24`
 - Hedef Android: `16 / API 36`

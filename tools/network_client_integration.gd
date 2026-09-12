@@ -93,11 +93,16 @@ func run() -> void:
 	await wait_for_start()
 	arena = current_scene
 	var expected_stage := 3 if mode == "online_coop" else 2
+	if mode == "online_vs" and (arena._vs_series.p1 != 1 or arena._vs_series.p2 != 0 or arena._vs_series.round != 2):
+		push_error("VS score was lost between rounds")
+		failed = true
 	if arena._match_over or int(arena._stage_data.get("index", -1)) != expected_stage:
 		push_error("Synchronized next round failed: stage=%s over=%s round=%s" % [arena._stage_data.get("index"), arena._match_over, net._round_id])
 		failed = true
 	await create_timer(0.5).timeout
 	if leader:
+		if mode == "online_vs":
+			arena._winner_slot = 2
 		arena._finish_match(false, "Kayip", "Integration retry")
 	await create_timer(1.0).timeout
 	arena._on_retry_requested()
@@ -138,6 +143,28 @@ func run() -> void:
 	if mode == "online_coop" and arena._status_text != "Zafer":
 		push_error("Co-op victory was overwritten by reconnect status")
 		failed = true
+	if mode == "online_vs":
+		if arena._vs_series.p1 != 1 or arena._vs_series.p2 != 2:
+			push_error("VS score was lost on host migration or result reconnect")
+			failed = true
+		arena._on_retry_requested()
+		await create_timer(2.0).timeout
+		await wait_for_start()
+		arena = current_scene
+		if net.is_host():
+			arena._winner_slot = 2
+			arena._finish_match(true, "Zafer", "Series winner")
+		await create_timer(1.0).timeout
+		if arena._vs_series.winner != 2 or arena._vs_series.p2 != 3:
+			push_error("Third VS win did not end the series")
+			failed = true
+		arena._on_retry_requested()
+		await create_timer(2.0).timeout
+		await wait_for_start()
+		arena = current_scene
+		if arena._vs_series.p1 != 0 or arena._vs_series.p2 != 0 or arena._vs_series.round != 1:
+			push_error("Confirmed VS rematch did not reset the score")
+			failed = true
 	print("NETWORK_METRICS: rtt_ms=", snappedf(net.get_latency_ms(), 0.1), " jitter_ms=", snappedf(net.get_jitter_ms(), 0.1))
 	print("NETWORK_CLIENT: ", "FAIL" if failed else "PASS", " mode=", mode, " leader=", leader, " role=", net._role)
 	await create_timer(2.0).timeout
