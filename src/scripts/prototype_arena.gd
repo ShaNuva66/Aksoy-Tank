@@ -64,7 +64,8 @@ class PauseInputProxy:
 
 	func _input(event: InputEvent) -> void:
 		if arena and arena.has_method("_handle_pause_overlay_input"):
-			arena._handle_pause_overlay_input(event)
+			if arena._handle_pause_overlay_input(event):
+				get_viewport().set_input_as_handled()
 
 @onready var player_template = $PlayerTank
 @onready var spawn_timer: Timer = $EnemySpawnTimer
@@ -356,10 +357,12 @@ func _input(event: InputEvent) -> void:
 				return
 
 		if _handle_pause_overlay_input(event):
+			get_viewport().set_input_as_handled()
 			return
 
 		if pause_button.visible and pause_button.get_global_rect().has_point(touch_position):
 			_on_pause_button_pressed()
+			get_viewport().set_input_as_handled()
 			return
 
 
@@ -528,13 +531,13 @@ func _install_pause_input_proxy() -> void:
 
 
 func _install_game_feel_ui() -> void:
-	pause_button.offset_left = -94
-	pause_button.offset_right = -14
-	pause_button.offset_top = 12
-	pause_button.offset_bottom = 92
+	pause_button.offset_left = -144
+	pause_button.offset_right = -32
+	pause_button.offset_top = 16
+	pause_button.offset_bottom = 128
 	pause_button.add_theme_font_size_override("font_size", 30)
-	shield_hud.offset_top = 104
-	shield_hud.offset_bottom = 152
+	shield_hud.offset_top = 140
+	shield_hud.offset_bottom = 188
 	_story_button = Button.new()
 	_story_button.name = "StoryButton"
 	_story_button.text = "HIKAYEYE DON"
@@ -656,6 +659,9 @@ func _play_sfx(sound_name: String, pitch_scale: float = 1.0, gain: float = 1.0) 
 func _handle_pause_overlay_input(event: InputEvent) -> bool:
 	if not pause_overlay.visible:
 		return false
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+		_set_pause_state(false)
+		return true
 
 	var touch_position := Vector2.ZERO
 	var pressed := false
@@ -671,10 +677,10 @@ func _handle_pause_overlay_input(event: InputEvent) -> bool:
 	if not pressed:
 		return false
 
-	if pause_analog_button.get_global_rect().has_point(touch_position):
+	if pause_analog_button.is_visible_in_tree() and pause_analog_button.get_global_rect().has_point(touch_position):
 		_on_pause_analog_button_pressed()
 		return true
-	if pause_buttons_button.get_global_rect().has_point(touch_position):
+	if pause_buttons_button.is_visible_in_tree() and pause_buttons_button.get_global_rect().has_point(touch_position):
 		_on_pause_buttons_button_pressed()
 		return true
 	if pause_resume_button.get_global_rect().has_point(touch_position):
@@ -1266,7 +1272,9 @@ func _go_to_main_menu() -> void:
 
 
 func _on_pause_button_pressed() -> void:
-	_toggle_pause_menu()
+	# Touch and its emulated mouse event must never toggle the menu back off.
+	if not _match_over and not _capture_requested:
+		_set_pause_state(true)
 
 
 func _on_pause_resume_button_pressed() -> void:
@@ -1299,7 +1307,7 @@ func _set_pause_state(paused: bool) -> void:
 		_online_countdown_label.visible = not paused and not _match_over and _online_start_remaining > 0.0
 	pause_overlay.visible = paused
 	get_tree().paused = paused and not _is_online_mode()
-	for control in [pause_overlay, pause_panel, pause_resume_button, pause_menu_button]:
+	for control in [pause_overlay, pause_panel, pause_resume_button, pause_menu_button, pause_analog_button, pause_buttons_button]:
 		control.process_mode = Node.PROCESS_MODE_ALWAYS
 	var local_player = _get_player_by_slot(_local_player_slot)
 	if is_instance_valid(local_player):
@@ -1317,17 +1325,17 @@ func _set_pause_state(paused: bool) -> void:
 
 
 func _set_control_style(style: String) -> void:
-	GameSession.set_control_style("analog")
+	GameSession.set_control_style(style)
 	if mobile_controls and mobile_controls.has_method("set_control_style"):
-		mobile_controls.set_control_style("analog")
+		mobile_controls.set_control_style(GameSession.get_control_style())
 	_refresh_pause_overlay()
 
 
 func _refresh_pause_overlay() -> void:
-	pause_control_label.visible = false
-	pause_control_row.visible = false
-	pause_analog_button.disabled = true
-	pause_buttons_button.disabled = true
+	pause_control_label.visible = true
+	pause_control_row.visible = true
+	pause_analog_button.disabled = GameSession.get_control_style() == "analog"
+	pause_buttons_button.disabled = GameSession.get_control_style() == "buttons"
 
 
 func _refresh_pause_button_visibility() -> void:

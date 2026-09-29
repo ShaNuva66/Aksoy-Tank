@@ -91,6 +91,7 @@ func configure_layout(local_player_count: int, primary_slot: int = 1) -> void:
 func set_control_style(style: String, persist: bool = false) -> void:
 	_clear_touch_state()
 	_control_style = STYLE_BUTTONS if style == STYLE_BUTTONS else STYLE_ANALOG
+	_apply_layout()
 	_apply_style_visibility()
 	_apply_enabled_state()
 
@@ -172,6 +173,13 @@ func _input(event: InputEvent) -> void:
 
 func _apply_layout() -> void:
 	if _local_player_count > 1:
+		var positions := {"up": Vector2(76, 0), "left": Vector2(0, 72), "right": Vector2(152, 72), "down": Vector2(76, 140)}
+		for direction in positions:
+			var button: Control = _get_direction_buttons(1)[direction]
+			button.position = positions[direction]
+			button.size = Vector2(84, 84)
+			button.label.add_theme_font_size_override("font_size", 28)
+	if _local_player_count > 1:
 		player_one_root.anchor_left = 0.0
 		player_one_root.anchor_top = 1.0
 		player_one_root.anchor_right = 0.0
@@ -230,7 +238,7 @@ func _apply_layout() -> void:
 	player_one_root.anchor_right = 1.0
 	player_one_root.anchor_bottom = 1.0
 	player_one_root.offset_left = 0.0
-	player_one_root.offset_top = -286.0
+	player_one_root.offset_top = -364.0 if _control_style == STYLE_BUTTONS else -286.0
 	player_one_root.offset_right = 0.0
 	player_one_root.offset_bottom = 0.0
 	player_one_shell.offset_left = 18.0
@@ -242,15 +250,21 @@ func _apply_layout() -> void:
 	player_one_joystick.offset_right = 259.0
 	player_one_joystick.offset_bottom = 240.0
 	player_one_button_pad.offset_left = 64.0
-	player_one_button_pad.offset_top = 20.0
-	player_one_button_pad.offset_right = 300.0
-	player_one_button_pad.offset_bottom = 240.0
+	player_one_button_pad.offset_top = 8.0
+	player_one_button_pad.offset_right = 400.0
+	player_one_button_pad.offset_bottom = 344.0
+	var positions := {"up": Vector2(112, 0), "left": Vector2(0, 112), "right": Vector2(224, 112), "down": Vector2(112, 224)}
+	for direction in positions:
+		var button: Control = _get_direction_buttons(1)[direction]
+		button.position = positions[direction]
+		button.size = Vector2(112, 112)
+		button.label.add_theme_font_size_override("font_size", 36)
 	player_one_fire.anchor_left = 1.0
 	player_one_fire.anchor_right = 1.0
 	player_one_fire.offset_left = -200.0
-	player_one_fire.offset_top = 48.0
+	player_one_fire.offset_top = 126.0 if _control_style == STYLE_BUTTONS else 48.0
 	player_one_fire.offset_right = -28.0
-	player_one_fire.offset_bottom = 220.0
+	player_one_fire.offset_bottom = 298.0 if _control_style == STYLE_BUTTONS else 220.0
 
 
 func _apply_style_visibility() -> void:
