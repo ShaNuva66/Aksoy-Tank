@@ -5,6 +5,8 @@ const ANTICIPATION_DISTANCE := 8.0
 const SEPARATION_RESPONSE := 18.0
 const MAX_SEPARATION_SPEED := 180.0
 const MIN_ESCAPE_SPEED := 84.0
+const CONTACT_GLIDE_SPEED := 72.0
+const MIN_GLIDE_INPUT := 18.0
 
 
 static func adjust_velocity_for_tanks(body: CharacterBody2D, desired_velocity: Vector2, radius: float) -> Vector2:
@@ -24,6 +26,12 @@ static func adjust_velocity_for_tanks(body: CharacterBody2D, desired_velocity: V
 		var inward_speed := -adjusted.dot(direction)
 		if inward_speed > 0.0:
 			adjusted += direction * inward_speed
+			var proximity := 1.0 - clampf((distance - minimum_distance) / ANTICIPATION_DISTANCE, 0.0, 1.0)
+			var tangent := direction.orthogonal()
+			var desired_tangent := desired_velocity.dot(tangent)
+			if absf(desired_tangent) >= MIN_GLIDE_INPUT:
+				tangent *= signf(desired_tangent)
+			adjusted += tangent * CONTACT_GLIDE_SPEED * proximity
 		if distance < minimum_distance:
 			var penetration := minimum_distance - distance
 			var escape_speed := minf(MAX_SEPARATION_SPEED, maxf(MIN_ESCAPE_SPEED, penetration * SEPARATION_RESPONSE))
@@ -54,7 +62,26 @@ static func apply_soft_separation(body: CharacterBody2D, radius: float, delta: f
 
 	var correction := separation * minf(delta * SEPARATION_RESPONSE, 0.32)
 	correction = correction.limit_length(MAX_SEPARATION_SPEED * delta)
-	body.move_and_collide(correction)
+	var start_position := body.global_position
+	var collision := body.move_and_collide(correction)
+	if collision == null:
+		return
+
+	var slide_motion := collision.get_remainder().slide(collision.get_normal())
+	if slide_motion.length_squared() > 0.0001:
+		body.move_and_collide(slide_motion)
+	if body.global_position.distance_squared_to(start_position) > 0.04:
+		return
+
+	# A wall can block the ideal outward correction. Try both wall tangents so
+	# tightly packed tanks still gain a route instead of remaining glued.
+	var wall_tangent := collision.get_normal().orthogonal()
+	var tangent_step := wall_tangent * minf(MAX_SEPARATION_SPEED * delta, correction.length())
+	if separation.dot(wall_tangent) < 0.0:
+		tangent_step = -tangent_step
+	var tangent_collision := body.move_and_collide(tangent_step)
+	if tangent_collision != null and body.global_position.distance_squared_to(start_position) <= 0.04:
+		body.move_and_collide(-tangent_step)
 
 
 static func _get_spacing_radius(body: Node) -> float:

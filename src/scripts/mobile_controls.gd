@@ -38,7 +38,8 @@ func _ready() -> void:
 	$Root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	player_one_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	player_one_shell.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	player_one_joystick.mouse_filter = Control.MOUSE_FILTER_STOP
+	player_one_shell.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	player_one_joystick.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	player_one_button_pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	player_one_up.mouse_filter = Control.MOUSE_FILTER_STOP
 	player_one_left.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -47,7 +48,8 @@ func _ready() -> void:
 	player_one_fire.mouse_filter = Control.MOUSE_FILTER_STOP
 	player_two_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	player_two_shell.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	player_two_joystick.mouse_filter = Control.MOUSE_FILTER_STOP
+	player_two_shell.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	player_two_joystick.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	player_two_button_pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	player_two_up.mouse_filter = Control.MOUSE_FILTER_STOP
 	player_two_left.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -59,6 +61,12 @@ func _ready() -> void:
 	player_two_root.visible = false
 	_control_style = GameSession.get_control_style() if GameSession.has_method("get_control_style") else STYLE_ANALOG
 	configure_layout(1, 1)
+	get_viewport().size_changed.connect(_clear_touch_state)
+
+
+func _notification(what: int) -> void:
+	if is_node_ready() and what in [NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_APPLICATION_PAUSED]:
+		_clear_touch_state()
 
 
 func configure_player_count(count: int) -> void:
@@ -66,6 +74,7 @@ func configure_player_count(count: int) -> void:
 
 
 func configure_layout(local_player_count: int, primary_slot: int = 1) -> void:
+	_clear_touch_state()
 	_local_player_count = clampi(local_player_count, 1, 2)
 	_primary_slot = clampi(primary_slot, 1, 2)
 	player_two_root.visible = _local_player_count > 1
@@ -80,12 +89,13 @@ func configure_layout(local_player_count: int, primary_slot: int = 1) -> void:
 
 
 func set_control_style(style: String, persist: bool = false) -> void:
-	_control_style = STYLE_ANALOG
+	_clear_touch_state()
+	_control_style = STYLE_BUTTONS if style == STYLE_BUTTONS else STYLE_ANALOG
 	_apply_style_visibility()
 	_apply_enabled_state()
 
 	if persist and GameSession.has_method("set_control_style"):
-		GameSession.set_control_style(STYLE_ANALOG)
+		GameSession.set_control_style(_control_style)
 
 
 func get_control_style() -> String:
@@ -100,7 +110,7 @@ func get_move_vector(player_slot: int = 1) -> Vector2:
 
 
 func get_turn_axis(player_slot: int = 1) -> float:
-	if not _controls_enabled:
+	if not _controls_enabled or (_local_player_count == 1 and player_slot != _primary_slot):
 		return 0.0
 
 	if _control_style == STYLE_BUTTONS:
@@ -113,7 +123,7 @@ func get_turn_axis(player_slot: int = 1) -> float:
 
 
 func get_move_axis(player_slot: int = 1) -> float:
-	if not _controls_enabled:
+	if not _controls_enabled or (_local_player_count == 1 and player_slot != _primary_slot):
 		return 0.0
 
 	if _control_style == STYLE_BUTTONS:
@@ -231,9 +241,9 @@ func _apply_layout() -> void:
 	player_one_joystick.offset_top = 8.0
 	player_one_joystick.offset_right = 259.0
 	player_one_joystick.offset_bottom = 240.0
-	player_one_button_pad.offset_left = 18.0
+	player_one_button_pad.offset_left = 64.0
 	player_one_button_pad.offset_top = 20.0
-	player_one_button_pad.offset_right = 254.0
+	player_one_button_pad.offset_right = 300.0
 	player_one_button_pad.offset_bottom = 240.0
 	player_one_fire.anchor_left = 1.0
 	player_one_fire.anchor_right = 1.0
@@ -244,10 +254,10 @@ func _apply_layout() -> void:
 
 
 func _apply_style_visibility() -> void:
-	player_one_shell.visible = true
-	player_one_button_pad.visible = false
-	player_two_shell.visible = _local_player_count > 1
-	player_two_button_pad.visible = false
+	player_one_shell.visible = _control_style == STYLE_ANALOG
+	player_one_button_pad.visible = _control_style == STYLE_BUTTONS
+	player_two_shell.visible = _local_player_count > 1 and _control_style == STYLE_ANALOG
+	player_two_button_pad.visible = _local_player_count > 1 and _control_style == STYLE_BUTTONS
 
 
 func _apply_enabled_state() -> void:
@@ -266,8 +276,8 @@ func _apply_enabled_state() -> void:
 
 
 func _set_button_group_enabled(player_slot: int, enabled: bool) -> void:
-	var buttons := _get_direction_buttons(player_slot)
-	for button in buttons.values():
+	var buttons := [player_two_up, player_two_left, player_two_right, player_two_down] if player_slot == 2 else [player_one_up, player_one_left, player_one_right, player_one_down]
+	for button in buttons:
 		if button and button.has_method("set_enabled"):
 			button.set_enabled(enabled)
 
@@ -404,7 +414,10 @@ func _try_bind_joystick_pointer(pointer_id: int, position: Vector2) -> bool:
 		if _joystick_pointer_by_slot.has(slot):
 			continue
 		var joystick = _get_joystick_control(slot)
-		if joystick and _is_point_inside_control(joystick, position, 42.0):
+		var viewport_size := get_viewport().get_visible_rect().size
+		var movement_zone := Rect2(Vector2(0, viewport_size.y * 0.32), Vector2(viewport_size.x * 0.48, viewport_size.y * 0.68))
+		var inside := movement_zone.has_point(position) if _local_player_count == 1 else _is_point_inside_control(joystick, position, 42.0)
+		if joystick and inside:
 			_joystick_pointer_by_slot[slot] = pointer_id
 			joystick.apply_external_screen_position(position)
 			return true

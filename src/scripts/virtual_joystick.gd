@@ -6,6 +6,7 @@ var _pointer_id := -1
 var _knob_offset := Vector2.ZERO
 var _enabled := true
 var _touch_pulse := 0.0
+var _origin := Vector2.ZERO
 
 const PAD_RADIUS := 82.0
 const KNOB_RADIUS := 34.0
@@ -24,6 +25,7 @@ func _gui_input(event: InputEvent) -> void:
 
 	if event is InputEventScreenTouch:
 		if event.pressed and _pointer_id == -1:
+			_origin = event.position
 			_pointer_id = event.index
 			_dragging = true
 			_start_touch_feedback()
@@ -37,6 +39,7 @@ func _gui_input(event: InputEvent) -> void:
 		accept_event()
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
+			_origin = event.position
 			_pointer_id = 0
 			_dragging = true
 			_start_touch_feedback()
@@ -62,8 +65,11 @@ func set_enabled(enabled: bool) -> void:
 
 
 func apply_external_screen_position(screen_position: Vector2) -> void:
-	var local_position := screen_position - get_global_rect().position
+	if not _enabled:
+		return
+	var local_position := get_global_transform_with_canvas().affine_inverse() * screen_position
 	if not _dragging:
+		_origin = local_position
 		_start_touch_feedback()
 	_dragging = true
 	_update_axis_from_position(local_position)
@@ -74,7 +80,7 @@ func release_external_touch() -> void:
 
 
 func _update_axis_from_position(position: Vector2) -> void:
-	var center := size * 0.5
+	var center := _origin
 	var delta := position - center
 
 	if delta.length() > PAD_RADIUS:
@@ -109,7 +115,7 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	var center := size * 0.5
+	var center := _origin if _dragging else size * 0.5
 	var pulse := clampf(_touch_pulse / 0.2, 0.0, 1.0)
 
 	draw_circle(center, PAD_RADIUS, Color(0.12, 0.18, 0.22, 0.44))

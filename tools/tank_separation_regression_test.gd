@@ -30,6 +30,7 @@ func _run() -> void:
 	current_scene = _world
 	await _test_exact_overlap_separates()
 	await _test_inward_drive_is_rejected()
+	await _test_head_on_contact_glides_apart()
 	await _test_wall_pinned_pair_can_escape()
 	if _failed:
 		print("TANK_SEPARATION: FAIL")
@@ -59,6 +60,25 @@ func _test_inward_drive_is_rejected() -> void:
 	_require(p1_adjusted.x <= 0.0, "Player one can still drive deeper into an overlapping opponent")
 	_require(p2_adjusted.x >= 0.0, "Player two can still drive deeper into an overlapping opponent")
 	_require(p1_adjusted.length() >= _tank_spacing.MIN_ESCAPE_SPEED and p2_adjusted.length() >= _tank_spacing.MIN_ESCAPE_SPEED, "Overlap escape force is too weak to break contact")
+	await _clear_world()
+
+
+func _test_head_on_contact_glides_apart() -> void:
+	var p1 = await _spawn_player(Vector2(400.0, 300.0), "player_1")
+	var p2 = await _spawn_player(Vector2(444.0, 300.0), "player_2")
+	var initial_midpoint: Vector2 = (p1.global_position + p2.global_position) * 0.5
+	for _frame in range(45):
+		var p1_velocity: Vector2 = _tank_spacing.adjust_velocity_for_tanks(p1, Vector2.RIGHT * 220.0, p1.get_tank_spacing_radius())
+		var p2_velocity: Vector2 = _tank_spacing.adjust_velocity_for_tanks(p2, Vector2.LEFT * 220.0, p2.get_tank_spacing_radius())
+		p1.global_position += p1_velocity * STEP
+		p2.global_position += p2_velocity * STEP
+		_tank_spacing.apply_soft_separation(p1, p1.get_tank_spacing_radius(), STEP)
+		_tank_spacing.apply_soft_separation(p2, p2.get_tank_spacing_radius(), STEP)
+		await physics_frame
+	var required_distance: float = float(p1.get_tank_spacing_radius()) + float(p2.get_tank_spacing_radius()) + float(_tank_spacing.CONTACT_BUFFER)
+	_require(p1.global_position.distance_to(p2.global_position) >= required_distance - 0.8, "Head-on tanks remained locked together")
+	_require(absf(p1.global_position.y - p2.global_position.y) >= 12.0, "Head-on contact did not create a smooth side-glide route")
+	_require(((p1.global_position + p2.global_position) * 0.5).distance_to(initial_midpoint) < 8.0, "Contact glide pushed the pair asymmetrically")
 	await _clear_world()
 
 

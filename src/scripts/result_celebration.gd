@@ -7,6 +7,8 @@ var _mode := ""
 var _elapsed := 0.0
 var _particles: Array[Dictionary] = []
 var _rng := RandomNumberGenerator.new()
+var _intensity := 1.0
+var _reduced_motion := false
 
 
 func _ready() -> void:
@@ -15,20 +17,25 @@ func _ready() -> void:
 	set_process(false)
 
 
-func play_result(won: bool, draw_result: bool = false) -> void:
+func play_result(won: bool, draw_result: bool = false, intensity: float = 1.0, reduced_motion: bool = false) -> void:
 	_mode = "draw" if draw_result else ("win" if won else "loss")
+	_intensity = clampf(intensity, 0.0, 1.0)
+	_reduced_motion = reduced_motion
 	_elapsed = 0.0
 	_rng.randomize()
 	_particles.clear()
-	var count := 76 if _mode == "win" else 46
+	var base_count := 76 if _mode == "win" else 46
+	var count := roundi(float(base_count) * _intensity * (0.35 if _reduced_motion else 1.0))
 	for index in range(count):
 		_particles.append(_make_particle(index, true))
 	visible = true
-	set_process(true)
+	set_process(not _reduced_motion)
 	queue_redraw()
 
 
 func _process(delta: float) -> void:
+	if _reduced_motion:
+		return
 	_elapsed += delta
 	var viewport_size := _safe_size()
 	for index in range(_particles.size()):

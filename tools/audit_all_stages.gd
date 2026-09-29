@@ -37,6 +37,7 @@ func _audit_catalog() -> void:
 		_fail("Expected 60 stages, found %d" % stage_count)
 
 	var profiles: Dictionary = ENEMY_TANK_SCRIPT.PROFILES
+	var layout_signatures := {}
 	for index in range(stage_count):
 		var stage := STAGE_CATALOG.get_stage(index)
 		var label := _stage_label(stage)
@@ -65,7 +66,12 @@ func _audit_catalog() -> void:
 		_audit_objective(stage, queue, label)
 		_audit_cells(brick_cells, steel_cells, label, bool(stage.get("core_enabled", true)))
 		_audit_spawn_bays(brick_cells, steel_cells, label)
+		_audit_permanent_routes(steel_cells, label)
 		_audit_boss_pressure(stage, queue, profiles, label)
+
+		var signature := _layout_signature(brick_cells, steel_cells)
+		_require(not layout_signatures.has(signature), "%s duplicates the wall layout from %s" % [label, layout_signatures.get(signature, "another stage")])
+		layout_signatures[signature] = label
 
 
 func _audit_objective(stage: Dictionary, queue: Array, label: String) -> void:
@@ -118,6 +124,44 @@ func _audit_spawn_bays(brick_cells: Array, steel_cells: Array, label: String) ->
 			for spawn_y in range(1, 4):
 				var bay_cell := Vector2i(spawn_cell.x + x_offset, spawn_y)
 				_require(not brick_cells.has(bay_cell) and not steel_cells.has(bay_cell), "%s blocks large-tank spawn bay at %s" % [label, bay_cell])
+
+
+func _audit_permanent_routes(steel_cells: Array, label: String) -> void:
+	var blocked := {}
+	for cell in steel_cells:
+		blocked[cell] = true
+	for spawn_cell in SPAWN_POINTS:
+		_require(_has_grid_route(spawn_cell, PLAYER_CELL, blocked), "%s has no permanent route from spawn %s to player" % [label, spawn_cell])
+
+
+func _has_grid_route(start: Vector2i, goal: Vector2i, blocked: Dictionary) -> bool:
+	var frontier: Array[Vector2i] = [start]
+	var visited := {start: true}
+	var cursor := 0
+	while cursor < frontier.size():
+		var current := frontier[cursor]
+		cursor += 1
+		if current == goal:
+			return true
+		for direction: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+			var next_cell: Vector2i = current + direction
+			if next_cell.x <= 0 or next_cell.x >= GRID_SIZE.x - 1 or next_cell.y <= 0 or next_cell.y >= GRID_SIZE.y - 1:
+				continue
+			if blocked.has(next_cell) or visited.has(next_cell):
+				continue
+			visited[next_cell] = true
+			frontier.append(next_cell)
+	return false
+
+
+func _layout_signature(brick_cells: Array, steel_cells: Array) -> String:
+	var entries: Array[String] = []
+	for cell in brick_cells:
+		entries.append("B%d,%d" % [cell.x, cell.y])
+	for cell in steel_cells:
+		entries.append("S%d,%d" % [cell.x, cell.y])
+	entries.sort()
+	return "|".join(entries)
 
 
 func _audit_boss_pressure(stage: Dictionary, queue: Array, profiles: Dictionary, label: String) -> void:

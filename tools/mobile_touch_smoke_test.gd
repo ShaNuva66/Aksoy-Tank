@@ -4,6 +4,7 @@ const MAIN_MENU_SCENE := "res://src/scenes/main_menu.tscn"
 const ARENA_SCENE := "res://src/scenes/prototype_arena.tscn"
 
 var _failed := false
+var _old_mode := "solo"
 
 
 func _init() -> void:
@@ -11,6 +12,8 @@ func _init() -> void:
 
 
 func _run() -> void:
+	_old_mode = root.get_node("GameSession").session_mode
+	root.get_node("GameSession").session_mode = "solo"
 	print("SMOKE: mobile touch flow started")
 	await _load_scene(MAIN_MENU_SCENE)
 	await _wait_frames(4)
@@ -23,6 +26,24 @@ func _run() -> void:
 	if start_button == null:
 		_fail("Start button not found")
 		return
+	var settings_button = current_scene.get_node_or_null("SettingsButton")
+	var settings_overlay = current_scene.get_node_or_null("SettingsOverlay")
+	var quick_match_button = current_scene.get_node_or_null("CenterContainer/Panel/Margin/VBox/OnlineConfig/QuickMatchButton")
+	if settings_button == null or settings_overlay == null or quick_match_button == null:
+		_fail("Settings, accessibility, or quick-match UI is missing")
+		return
+	settings_button.pressed.emit()
+	await _wait_frames(2)
+	if not settings_overlay.visible or current_scene._effects_slider == null or current_scene._reduced_motion_toggle == null:
+		_fail("Settings overlay did not expose effect accessibility controls")
+		return
+	var panel_rect: Rect2 = current_scene._settings_panel.get_global_rect()
+	var viewport_size := Vector2(current_scene.get_viewport_rect().size)
+	if panel_rect.position.x < 0.0 or panel_rect.position.y < 0.0 or panel_rect.end.x > viewport_size.x or panel_rect.end.y > viewport_size.y:
+		_fail("Settings panel does not fit inside the mobile viewport")
+		return
+	current_scene._settings_close_button.pressed.emit()
+	await _wait_frames(2)
 
 	start_button.pressed.emit()
 	await _wait_frames(12)
@@ -37,8 +58,8 @@ func _run() -> void:
 	if pause_overlay == null or pause_button == null:
 		_fail("Pause UI not found")
 		return
-	if pause_button.visible or pause_overlay.visible:
-		_fail("Removed top pause UI is still visible")
+	if not pause_button.visible or pause_overlay.visible:
+		_fail("Compact mobile pause control is not in its resting state")
 		return
 
 	var mobile_controls := current_scene.get_node_or_null("MobileControls")
@@ -64,6 +85,7 @@ func _run() -> void:
 
 	if not _failed:
 		print("SMOKE: PASS")
+	root.get_node("GameSession").session_mode = _old_mode
 	quit(0 if not _failed else 1)
 
 

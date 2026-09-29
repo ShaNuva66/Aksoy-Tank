@@ -3,7 +3,7 @@ extends Node
 const STAGE_CATALOG = preload("res://src/scripts/stage_catalog.gd")
 const SAVE_PATH := "user://campaign_progress.cfg"
 const SESSION_MODES := ["solo", "online_coop", "online_vs"]
-const AVAILABLE_SESSION_MODES := ["solo", "online_vs"]
+const AVAILABLE_SESSION_MODES := ["solo", "online_coop", "online_vs"]
 const ONLINE_AVAILABLE := true
 const CONTROL_STYLES := ["analog"]
 const DEFAULT_SERVER_URL := "wss://atify.com.tr/aksoy-tank/ws"
@@ -29,6 +29,12 @@ var room_code := DEFAULT_ROOM_CODE
 var control_style := "analog"
 var player_name := DEFAULT_PLAYER_NAME
 var tank_style_id := DEFAULT_TANK_STYLE
+var music_volume := 0.55
+var sfx_volume := 0.8
+var haptics_enabled := true
+var effects_intensity := 0.8
+var reduced_motion_enabled := false
+var onboarding_completed := false
 
 
 func get_stage_count() -> int:
@@ -107,6 +113,7 @@ func mark_stage_completed(index: int) -> bool:
 func reset_progress() -> void:
 	unlocked_stage_count = 1
 	selected_stage_index = 0
+	onboarding_completed = false
 	_save_progress()
 	progress_changed.emit()
 
@@ -127,8 +134,69 @@ func get_control_style() -> String:
 	return control_style
 
 
+func get_music_volume() -> float:
+	return music_volume
+
+
+func set_music_volume(value: float) -> void:
+	music_volume = clampf(value, 0.0, 1.0)
+	_save_progress()
+	progress_changed.emit()
+
+
+func get_sfx_volume() -> float:
+	return sfx_volume
+
+
+func set_sfx_volume(value: float) -> void:
+	sfx_volume = clampf(value, 0.0, 1.0)
+	_save_progress()
+	progress_changed.emit()
+
+
+func is_haptics_enabled() -> bool:
+	return haptics_enabled
+
+
+func set_haptics_enabled(enabled: bool) -> void:
+	haptics_enabled = enabled
+	_save_progress()
+	progress_changed.emit()
+
+
+func get_effects_intensity() -> float:
+	return effects_intensity
+
+
+func set_effects_intensity(value: float) -> void:
+	effects_intensity = clampf(value, 0.0, 1.0)
+	_save_progress()
+	progress_changed.emit()
+
+
+func is_reduced_motion_enabled() -> bool:
+	return reduced_motion_enabled
+
+
+func set_reduced_motion_enabled(enabled: bool) -> void:
+	reduced_motion_enabled = enabled
+	_save_progress()
+	progress_changed.emit()
+
+
+func has_completed_onboarding() -> bool:
+	return onboarding_completed
+
+
+func complete_onboarding() -> void:
+	if onboarding_completed:
+		return
+	onboarding_completed = true
+	_save_progress()
+
+
 func set_control_style(style: String) -> void:
-	control_style = "analog"
+	control_style = "buttons" if style == "buttons" else "analog"
 	_save_progress()
 	progress_changed.emit()
 
@@ -261,6 +329,12 @@ func _load_progress() -> void:
 		control_style = String(config.get_value("settings", "control_style", "analog"))
 		player_name = String(config.get_value("profile", "player_name", DEFAULT_PLAYER_NAME))
 		tank_style_id = String(config.get_value("profile", "tank_style_id", DEFAULT_TANK_STYLE))
+		music_volume = float(config.get_value("settings", "music_volume", 0.55))
+		sfx_volume = float(config.get_value("settings", "sfx_volume", 0.8))
+		haptics_enabled = bool(config.get_value("settings", "haptics_enabled", true))
+		effects_intensity = float(config.get_value("settings", "effects_intensity", 0.8))
+		reduced_motion_enabled = bool(config.get_value("settings", "reduced_motion_enabled", false))
+		onboarding_completed = bool(config.get_value("campaign", "onboarding_completed", false))
 	else:
 		room_code = _generate_room_code()
 
@@ -272,7 +346,7 @@ func _load_progress() -> void:
 		session_mode = "online_coop"
 	if not AVAILABLE_SESSION_MODES.has(session_mode):
 		session_mode = "solo"
-	control_style = "analog"
+	control_style = "buttons" if control_style == "buttons" else "analog"
 	server_url = DEFAULT_SERVER_URL
 	room_code = _sanitize_room_code(room_code)
 	player_name = _sanitize_player_name(player_name)
@@ -280,6 +354,9 @@ func _load_progress() -> void:
 		player_name = DEFAULT_PLAYER_NAME
 	if not TANK_STYLES.has(tank_style_id):
 		tank_style_id = DEFAULT_TANK_STYLE
+	music_volume = clampf(music_volume, 0.0, 1.0)
+	sfx_volume = clampf(sfx_volume, 0.0, 1.0)
+	effects_intensity = clampf(effects_intensity, 0.0, 1.0)
 	if room_code.is_empty() or room_code == "ALFA1":
 		room_code = _generate_room_code()
 
@@ -294,6 +371,12 @@ func _save_progress() -> void:
 	config.set_value("settings", "control_style", control_style)
 	config.set_value("profile", "player_name", player_name)
 	config.set_value("profile", "tank_style_id", tank_style_id)
+	config.set_value("settings", "music_volume", music_volume)
+	config.set_value("settings", "sfx_volume", sfx_volume)
+	config.set_value("settings", "haptics_enabled", haptics_enabled)
+	config.set_value("settings", "effects_intensity", effects_intensity)
+	config.set_value("settings", "reduced_motion_enabled", reduced_motion_enabled)
+	config.set_value("campaign", "onboarding_completed", onboarding_completed)
 	config.save(SAVE_PATH)
 
 

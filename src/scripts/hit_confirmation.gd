@@ -10,13 +10,17 @@ var feedback_text := "İSABET!"
 var _elapsed := 0.0
 var _accent := Color("#ffd166")
 var _label: Label
+var _intensity := 1.0
+var _reduced_motion := false
 
 
-func configure(local_score: bool, damage: int = 1, destroyed: bool = false, blocked: bool = false) -> void:
+func configure(local_score: bool, damage: int = 1, destroyed: bool = false, blocked: bool = false, intensity: float = 1.0, reduced_motion: bool = false) -> void:
 	scored_by_local = local_score
 	damage_amount = maxi(damage, 1)
 	destroyed_target = destroyed
 	blocked_hit = blocked
+	_intensity = clampf(intensity, 0.0, 1.0)
+	_reduced_motion = reduced_motion
 	_refresh_style()
 
 
@@ -32,8 +36,9 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_elapsed += delta
 	var progress := clampf(_elapsed / EFFECT_DURATION, 0.0, 1.0)
-	position.y -= 24.0 * delta
-	var pop := 1.0 + sin(minf(progress * 2.2, 1.0) * PI) * 0.24
+	position.y -= (8.0 if _reduced_motion else 24.0) * delta
+	var pop_strength := 0.04 if _reduced_motion else 0.24 * _intensity
+	var pop := 1.0 + sin(minf(progress * 2.2, 1.0) * PI) * pop_strength
 	scale = Vector2.ONE * pop
 	modulate.a = 1.0 if progress < 0.58 else 1.0 - ((progress - 0.58) / 0.42)
 	queue_redraw()
@@ -75,9 +80,11 @@ func _create_label() -> void:
 
 
 func _draw() -> void:
+	if _intensity <= 0.01:
+		return
 	var pulse := sin(clampf(_elapsed / 0.22, 0.0, 1.0) * PI)
 	var ring_radius := 22.0 + pulse * 9.0
-	draw_circle(Vector2.ZERO, 10.0 + pulse * 4.0, Color(_accent, 0.2))
+	draw_circle(Vector2.ZERO, 10.0 + pulse * 4.0, Color(_accent, 0.2 * _intensity))
 	draw_arc(Vector2.ZERO, ring_radius, 0.0, TAU, 28, _accent, 3.0, true)
 	for index in range(8):
 		var direction := Vector2.RIGHT.rotated(float(index) * TAU / 8.0)

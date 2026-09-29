@@ -13,6 +13,7 @@ script = ExtResource("1")
 [node name="ArenaCamera" type="Camera2D" parent="."]
 position = Vector2(640, 360)
 enabled = true
+process_callback = 0
 
 [node name="EnemySpawnTimer" type="Timer" parent="."]
 wait_time = 1.0
@@ -30,11 +31,13 @@ mouse_filter = 2
 color = Color(0.02, 0.03, 0.04, 0.78)
 
 [node name="Header" type="MarginContainer" parent="Hud"]
-visible = false
-offset_left = 20.0
-offset_top = 14.0
-offset_right = 660.0
-offset_bottom = 118.0
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -230.0
+offset_top = 10.0
+offset_right = 230.0
+offset_bottom = 82.0
+mouse_filter = 2
 theme_override_constants/margin_left = 8
 theme_override_constants/margin_top = 6
 theme_override_constants/margin_right = 8
@@ -44,45 +47,53 @@ theme_override_constants/margin_bottom = 6
 theme_override_constants/separation = 4
 
 [node name="InfoLabel" type="Label" parent="Hud/Header/VBox"]
+visible = false
 theme_override_font_sizes/font_size = 22
 text = "SEVIYE 01 | Dust Gate"
 
 [node name="BriefLabel" type="Label" parent="Hud/Header/VBox"]
+visible = false
 theme_override_font_sizes/font_size = 16
 text = "Acik hatlar ve ortada kirilabilir bir gecit."
 
 [node name="StatusLabel" type="Label" parent="Hud/Header/VBox"]
+visible = false
 theme_override_font_sizes/font_size = 16
 text = "Durum: Catismaya devam"
 
 [node name="StatsLabel" type="Label" parent="Hud/Header/VBox"]
+visible = false
 theme_override_font_sizes/font_size = 15
 text = "Zirh: 3/3 | Sahadaki dusman: 0 | Toplam kalan: 8"
 
 [node name="WaveLabel" type="Label" parent="Hud/Header/VBox"]
-theme_override_font_sizes/font_size = 15
+theme_override_font_sizes/font_size = 17
 text = "Temizlenen: 0/8"
+horizontal_alignment = 1
 
 [node name="PowerLabel" type="Label" parent="Hud/Header/VBox"]
+visible = false
 theme_override_font_sizes/font_size = 15
 text = "Destek: Hazir"
 
 [node name="AlertLabel" type="Label" parent="Hud/Header/VBox"]
 visible = false
-theme_override_font_sizes/font_size = 15
+theme_override_font_sizes/font_size = 18
 modulate = Color(0.95, 0.86, 0.56, 1)
 text = ""
+horizontal_alignment = 1
 
 [node name="PauseButton" type="Button" parent="Hud"]
 visible = false
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -186.0
-offset_top = 16.0
+offset_left = -76.0
+offset_top = 12.0
 offset_right = -20.0
-offset_bottom = 72.0
+offset_bottom = 64.0
+tooltip_text = "Duraklat"
 theme_override_font_sizes/font_size = 20
-text = "DURAKLAT"
+text = "II"
 
 [node name="ShieldBackdrop" type="ColorRect" parent="Hud"]
 visible = false
@@ -99,21 +110,22 @@ color = Color(0.02, 0.05, 0.07, 0.8)
 visible = false
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -316.0
-offset_top = 82.0
+offset_left = -274.0
+offset_top = 72.0
 offset_right = -20.0
-offset_bottom = 136.0
+offset_bottom = 120.0
+mouse_filter = 2
 
 [node name="VBox" type="VBoxContainer" parent="Hud/ShieldHud"]
 theme_override_constants/separation = 5
 
 [node name="Label" type="Label" parent="Hud/ShieldHud/VBox"]
-theme_override_font_sizes/font_size = 15
+theme_override_font_sizes/font_size = 14
 text = "KALKAN"
 horizontal_alignment = 2
 
 [node name="Bar" type="ProgressBar" parent="Hud/ShieldHud/VBox"]
-custom_minimum_size = Vector2(280, 14)
+custom_minimum_size = Vector2(254, 10)
 max_value = 1.0
 show_percentage = false
 

@@ -2,6 +2,7 @@ extends CharacterBody2D
 
 signal destroyed
 signal health_changed(current_health: int, max_health: int)
+signal shot_fired
 
 const BULLET_SCENE := preload("res://src/scenes/bullet.tscn")
 const MobileFeedback := preload("res://src/scripts/mobile_feedback.gd")
@@ -152,6 +153,7 @@ func configure_player(profile: Dictionary) -> void:
 	_fire_cooldown_scale = maxf(float(profile.get("fire_cooldown_scale", 1.0)), 0.45)
 	_grant_shield(float(profile.get("spawn_shield_duration", 0.0)))
 	apply_cosmetic_profile(profile)
+	_update_nameplate_transform()
 	health_changed.emit(health, max_health)
 	queue_redraw()
 
@@ -166,8 +168,11 @@ func apply_cosmetic_profile(profile: Dictionary) -> void:
 	_track_color = _read_color(profile.get("track_color", _track_color), _track_color)
 	_accent_color = _read_color(profile.get("accent_color", _accent_color), _accent_color)
 	if _nameplate:
-		_nameplate.text = callsign
-		_nameplate.add_theme_color_override("font_color", _accent_color.lightened(0.12))
+		if _nameplate.text != callsign:
+			_nameplate.text = callsign
+		var name_color := _accent_color.lightened(0.12)
+		if _nameplate.get_theme_color("font_color") != name_color:
+			_nameplate.add_theme_color_override("font_color", name_color)
 	queue_redraw()
 
 
@@ -192,7 +197,12 @@ func set_external_input(input_state: Dictionary) -> void:
 	_external_input = Dictionary(input_state.duplicate(true))
 
 
+var local_input_enabled := true
+
+
 func capture_local_input_state() -> Dictionary:
+	if not local_input_enabled:
+		return {"turn": 0.0, "drive": 0.0, "move_x": 0.0, "move_y": 0.0, "aim_rotation": rotation, "fire": false}
 	var turn_input := 0.0
 	var drive_input := 0.0
 	var move_vector := Vector2.ZERO
@@ -358,7 +368,11 @@ func _fire() -> void:
 		return
 
 	_fire_timer = _get_fire_cooldown()
+	shot_fired.emit()
 	MobileFeedback.fire()
+	var audio_manager := get_node_or_null("/root/AudioManager")
+	if audio_manager:
+		audio_manager.play_sfx("fire", 1.0, 0.78)
 
 	var bullet = BULLET_SCENE.instantiate()
 	bullet.global_position = global_position + Vector2.UP.rotated(rotation) * 42.0

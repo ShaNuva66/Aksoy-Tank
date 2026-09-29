@@ -20,6 +20,7 @@ func _run() -> void:
 		quit(1)
 		return
 	_audit_catalog_rules()
+	_audit_persistent_accessibility_settings()
 	_audit_wall_geometry()
 	await _audit_core_stage()
 	await _audit_boss_stage()
@@ -62,6 +63,23 @@ func _audit_wall_geometry() -> void:
 	wall.queue_free()
 
 
+func _audit_persistent_accessibility_settings() -> void:
+	var old_effects := float(_game_session.get_effects_intensity())
+	var old_reduced := bool(_game_session.is_reduced_motion_enabled())
+	var old_haptics := bool(_game_session.is_haptics_enabled())
+	_game_session.set_effects_intensity(0.35)
+	_game_session.set_reduced_motion_enabled(true)
+	_game_session.set_haptics_enabled(false)
+	var config := ConfigFile.new()
+	_require(config.load(_game_session.SAVE_PATH) == OK, "Settings save file could not be read")
+	_require(is_equal_approx(float(config.get_value("settings", "effects_intensity", -1.0)), 0.35), "Effect intensity was not persisted")
+	_require(bool(config.get_value("settings", "reduced_motion_enabled", false)), "Reduced motion was not persisted")
+	_require(not bool(config.get_value("settings", "haptics_enabled", true)), "Haptics preference was not persisted")
+	_game_session.set_effects_intensity(old_effects)
+	_game_session.set_reduced_motion_enabled(old_reduced)
+	_game_session.set_haptics_enabled(old_haptics)
+
+
 func _audit_core_stage() -> void:
 	_game_session.set_session_mode("solo")
 	_game_session.unlocked_stage_count = STAGE_CATALOG.get_stage_count()
@@ -77,9 +95,11 @@ func _audit_core_stage() -> void:
 		_require(fort != null and String(fort.block_type) == "fortified" and int(fort.durability) == 7, "Core fort is not 7-hit fortified at %s" % cell)
 	_require(arena.get_node_or_null("Hud/ShieldHud/VBox/Bar") != null, "Shield duration bar is missing")
 	_require(not arena.get_node("Hud/HeaderBackdrop").visible, "Obsolete black HUD backdrop is still visible")
-	_require(not arena.get_node("Hud/Header").visible, "Obsolete top HUD text is still visible")
-	_require(not arena.get_node("Hud/ShieldHud").visible, "Shield panel should not replace the minimal health HUD")
-	_require(not arena.get_node("Hud/PauseButton").visible, "Pause button should not remain in the minimal gameplay HUD")
+	_require(arena.get_node("Hud/Header").visible, "Compact wave HUD is hidden")
+	_require(arena.get_node("Hud/Header/VBox/WaveLabel").visible, "Wave progress is not visible")
+	_require(not arena.get_node("Hud/Header/VBox/InfoLabel").visible, "Bulky stage text returned to the compact HUD")
+	_require(arena.get_node("Hud/ShieldHud").visible, "Active spawn shield duration is not visible")
+	_require(arena.get_node("Hud/PauseButton").visible, "Solo mobile pause button is hidden")
 	_require(arena.get_node_or_null("Hud/HeartHud") != null, "Minimal health indicator is missing")
 	await _free_arena(arena)
 
@@ -193,13 +213,18 @@ func _audit_vs_stage() -> void:
 	arena._result_is_draw = false
 	arena._elimination_text = "Rakip, Ali Atalay'ın tankı tarafından ezildi!"
 	_require(arena._configure_local_vs_result(), "Local winner was not recognized")
-	_require(String(arena.result_title.text).contains("ZAFERDE"), "Winner result is not motivational")
-	_require(String(arena.result_subtitle.text).contains("tarafından ezildi"), "Competitive elimination copy is missing")
+	_require(String(arena.result_title.text) == "RAUND SENIN", "Winner round result is incorrect")
+	_require(String(arena.result_subtitle.text).contains("HEDEF 3"), "Series target is missing from the result")
 	arena._winner_slot = 2
 	_require(not arena._configure_local_vs_result(), "Local loser was incorrectly marked as winner")
-	_require(String(arena.result_title.text).contains("ARENAYI ALDI"), "Loser result is not personalized")
+	_require(String(arena.result_title.text) == "RAUND KAYBEDILDI", "Loser round result is incorrect")
 	arena._winner_slot = 1
+	arena._capture_requested = true
 	arena._finish_match(true, "Ali Atalay Arenayı Ezdi", arena._elimination_text)
+	_require(int(arena._vs_series.get("p1", 0)) == 1, "Round victory did not update the series score")
+	arena._finish_match(true, "Duplicate result", "")
+	_require(int(arena._vs_series.get("p1", 0)) == 1, "Duplicate result counted the victory twice")
+	arena._capture_requested = false
 	await create_timer(0.8).timeout
 	_require(arena.result_overlay.visible and result_fx.visible, "Winner animation did not become visible")
 	_require(not arena.retry_button.disabled, "Result actions did not unlock after animation")

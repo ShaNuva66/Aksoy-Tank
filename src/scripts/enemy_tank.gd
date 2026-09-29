@@ -602,6 +602,9 @@ func _fire() -> void:
 	_fire_timer = _rng.randf_range(_fire_min, _fire_max) + _rng.randf_range(VOLLEY_RECOVERY_MIN, VOLLEY_RECOVERY_MAX)
 	_lane_lock_time = 0.0
 	_recoil_time = 1.0
+	var audio_manager := get_node_or_null("/root/AudioManager")
+	if audio_manager:
+		audio_manager.play_sfx("enemy_fire", 0.88 + _projectile_scale * 0.08, 0.28)
 	var burst_center := float(_burst_count - 1) * 0.5
 	for burst_index in range(_burst_count):
 		var angle_offset := (float(burst_index) - burst_center) * _burst_spread

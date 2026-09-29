@@ -1,46 +1,56 @@
 # Privacy Policy
 
-Last updated: August 18, 2026
+Last updated: September 12, 2026
 
-Aksoy Tank is a mobile action game with offline solo play and optional online 1v1 rooms.
+This policy explains how Aksoy Tank, provided by Atalay Aksoy, processes data in offline play and the optional online co-op and 1v1 modes.
 
-## What we collect
+## Data stored on the device
 
-The game is not designed around user accounts, advertising profiles, analytics tracking, or personal profile creation.
+The game stores unlocked and selected stages, control and session preferences, the room code, player name, and selected tank style locally on the user's device. This information is not used for advertising or analytics.
 
-Campaign progress is saved locally on your device so unlocked stages can be remembered between sessions.
+## Data processed during online play
 
-## Internet access
+When online co-op or 1v1 is selected, the game sends the following data to the Aksoy Tank relay server:
 
-Online 1v1 play sends a short room code and real-time gameplay messages through the Aksoy Tank relay at `atify.com.tr`. These messages are used only to connect the two players, are not written to a gameplay database, and are discarded when the room closes. Solo play does not require an internet connection.
+- room code
+- app build version
+- player-entered name or nickname
+- selected tank style
+- gameplay input and live match-state messages
 
-Like any internet service, the hosting provider must temporarily process network connection information, such as an IP address, to deliver traffic and protect service availability. Aksoy Tank does not use this information for advertising, analytics, tracking, or user profiles.
+The player name, tank style, and match data required to run the game are sent to the other player in the same room. A real name is not required; players can use a nickname.
 
-## Local gameplay data
+Room names, room codes, mode, occupancy and password-required status are visible in the public room directory for the matching game version. Do not put personal information in a room name. Optional room passwords are sent over TLS, verified using salted password hashes held in server memory, and are never included in the public directory. A random per-player reconnection token is held in client and server memory for the room session; it is not saved to device settings. Password hashes and tokens are removed when the room closes. Short-lived IP-based attempt counters limit repeated join requests.
 
-Local campaign progress:
+## Purpose and retention
 
-- stays on the device
-- is not linked to a named personal profile inside the game
-- can be cleared by deleting saved data in the app
+Online data is processed only to connect players, run the match, measure latency, and protect the connection. Room and match data is not written to a persistent gameplay database and is removed from server memory when the room closes.
 
-## Analytics, ads, and accounts
+The hosting infrastructure may temporarily process technical connection information such as an IP address to route traffic and protect service availability. It is not used for advertising, tracking, analytics, or user profiling.
 
-The current version of the game does not use:
+## Sharing and service providers
 
-- account login
-- analytics SDKs
-- advertising SDKs
-- third-party ad networks
+Data is not sold. The hosting provider processes data only as a service provider for online functionality. The player name, tank style, and required match data are visible only to the opponent connected with the same room code.
+
+## Security
+
+Production online traffic is encrypted in transit using TLS over `wss://`. Aksoy Tank does not currently use accounts, chat, advertising SDKs, analytics SDKs, or third-party ad networks.
+
+## User choices
+
+- Solo mode can be played without an internet connection.
+- A nickname can be used instead of a real name.
+- Local game data can be removed with the in-game "Delete Saved Data" option or by clearing the app's data.
+- There is no separate account-deletion process because the game does not create accounts or retain match data permanently.
 
 ## Children
 
-The game is designed as a general audience arcade action experience and does not knowingly collect personal information from children.
+Aksoy Tank is a general-audience arcade game and is not intended to knowingly collect personal information from children. Players should not enter real personal information as an online player name.
 
 ## Changes
 
-If analytics, ads, accounts, persistent match history, chat, or cloud saving are added in a future release, this policy and the App Store privacy disclosure will be updated before that version is published.
+This policy will be updated before a release that changes data handling, online infrastructure, advertising, analytics, accounts, or cloud saving.
 
 ## Contact
 
-Questions can be sent to `atalayaksoy1@gmail.com`. The HTML version in `docs/aksoy-tank-gizlilik.html` must be published at a public HTTPS URL before App Store review.
+Questions can be sent to `atalayaksoy1@gmail.com`. Public policy URL: `https://atify.com.tr/aksoy-tank/privacy`.

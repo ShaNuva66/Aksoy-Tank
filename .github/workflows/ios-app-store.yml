@@ -142,7 +142,9 @@ jobs:
         run: |
           set -euo pipefail
           sed -i '' "s/__APPLE_TEAM_ID__/${APPLE_TEAM_ID}/g" export_presets.cfg
-          sed -i '' "s/__BUILD_NUMBER__/${GITHUB_RUN_NUMBER}/g" export_presets.cfg
+          build_number=$((29 + GITHUB_RUN_NUMBER))
+          echo "IOS_BUILD_NUMBER=$build_number" >> "$GITHUB_ENV"
+          sed -i '' "s/__BUILD_NUMBER__/${build_number}/g" export_presets.cfg
           sed -e "s/__APPLE_TEAM_ID__/${APPLE_TEAM_ID}/g" \
             -e "s/__IOS_PROFILE_NAME__/${IOS_PROFILE_NAME}/g" \
             .github/export-options.plist.template > "$RUNNER_TEMP/ExportOptions.plist"
@@ -152,6 +154,9 @@ jobs:
         run: |
           set -euo pipefail
           "$GODOT_BIN" --headless --path . --editor --quit
+          for test in validate_ios_source mobile_touch_smoke_test room_browser_test snapshot_codec_test; do
+            "$GODOT_BIN" --headless --path . --script "res://tools/${test}.gd"
+          done
 
       - name: Xcode projesini olustur
         run: |
@@ -203,6 +208,16 @@ jobs:
             --type ios \
             --apiKey "$APP_STORE_CONNECT_KEY_ID" \
             --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
+
+      - name: TestFlight islemesini ve dahili test erisimini dogrula
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/asc-python"
+          "$RUNNER_TEMP/asc-python/bin/pip" install cryptography
+          "$RUNNER_TEMP/asc-python/bin/python" tools/asc_testflight.py
 
       - name: IPA ve arsivi sakla
         if: always()

@@ -28,6 +28,7 @@ shape = SubResource("HurtboxShape")
 
 [node name="Camera2D" type="Camera2D" parent="."]
 enabled = false
+process_callback = 0
 script = ExtResource("2")
 
 [node name="Nameplate" type="Label" parent="."]

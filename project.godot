@@ -1,17 +1,9 @@
-; Engine configuration file.
-; It's best edited using the editor UI and not directly,
-; since the parameters that go here are not all obvious.
-;
-; Format:
-;   [section] ; section goes between []
-;   param=value ; assign values to parameters
-
 config_version=5
 
 [application]
 
 config/name="Aksoy Tank"
-config/version="1.9.2"
+config/version="2.0.7"
 run/main_scene="res://src/scenes/main_menu.tscn"
 config/features=PackedStringArray("4.6")
 config/icon="res://assets/ui/icon.png"
@@ -20,6 +12,7 @@ config/icon="res://assets/ui/icon.png"
 
 GameSession="*res://src/scripts/game_session.gd"
 NetSession="*res://src/scripts/net_session.gd"
+AudioManager="*res://src/scripts/audio_manager.gd"
 
 [display]
 
@@ -31,7 +24,7 @@ window/handheld/orientation=0
 window/ios/hide_home_indicator=true
 window/ios/hide_status_bar=true
 window/ios/suppress_ui_gesture=true
-window/ios/allow_high_refresh_rate=true
+window/ios/allow_high_refresh_rate=false
 
 [input_devices]
 
@@ -44,6 +37,7 @@ common/physics_interpolation=true
 
 [rendering]
 
-anti_aliasing/quality/msaa_2d=1
+anti_aliasing/quality/msaa_2d=0
 renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true

@@ -242,6 +242,16 @@ static func _apply_layout_signature(stage: Dictionary, stage_number: int) -> voi
 	var marker_y := 2 + (stage_number % 3) * 3
 	brick_cells.append(Vector2i(marker_x, marker_y))
 	brick_cells.append(Vector2i(25 - marker_x, 12 - marker_y / 2))
+
+	# Encode the stage number into a low flank barricade. This gives every map a
+	# stable visual fingerprint without narrowing the wide central combat lanes.
+	for bit_index in range(6):
+		if (stage_number & (1 << bit_index)) != 0:
+			brick_cells.append(Vector2i(2 + bit_index, 13))
+	var flank_x := 18 + (stage_number - 1) % 6
+	brick_cells.append(Vector2i(flank_x, 12))
+	if stage_number % 2 == 0:
+		brick_cells.append(Vector2i(flank_x, 13))
 	stage["brick_cells"] = brick_cells
 
 
