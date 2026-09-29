@@ -10,7 +10,7 @@ $engine = $Godot.Replace('_console.exe', '.exe')
 if (-not (Test-Path -LiteralPath $engine)) { $engine = $Godot }
 try {
     $tests = @('validate_ios_source', 'control_selection_test', 'floating_analog_test', 'mobile_touch_smoke_test',
-        'online_ui_smoke_test', 'room_browser_test', 'lifecycle_regression_test', 'pause_touch_regression_test',
+        'online_ui_smoke_test', 'room_browser_test', 'lifecycle_regression_test', 'pause_touch_regression_test', 'campaign_progression_test',
         'gameplay_regression_test', 'tank_separation_regression_test',
         'wall_collision_regression_test', 'hitbox_regression_test',
         'network_start_test', 'network_resilience_test', 'network_smoothing_test',

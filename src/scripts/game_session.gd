@@ -97,9 +97,11 @@ func get_highest_selectable_stage_index() -> int:
 
 
 func mark_stage_completed(index: int) -> bool:
+	if index < 0 or index >= get_stage_count():
+		return false
 	var previous_unlocked := unlocked_stage_count
 	unlocked_stage_count = max(unlocked_stage_count, min(index + 2, get_stage_count()))
-	selected_stage_index = clamp(selected_stage_index, 0, get_highest_selectable_stage_index())
+	selected_stage_index = mini(index + 1, get_stage_count() - 1)
 	_save_progress()
 
 	if unlocked_stage_count != previous_unlocked:

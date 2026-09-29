@@ -154,7 +154,7 @@ jobs:
         run: |
           set -euo pipefail
           "$GODOT_BIN" --headless --path . --editor --quit
-          for test in validate_ios_source mobile_touch_smoke_test pause_touch_regression_test lifecycle_regression_test control_selection_test room_browser_test snapshot_codec_test; do
+          for test in validate_ios_source mobile_touch_smoke_test pause_touch_regression_test campaign_progression_test lifecycle_regression_test control_selection_test room_browser_test snapshot_codec_test; do
             "$GODOT_BIN" --headless --path . --script "res://tools/${test}.gd"
           done
 

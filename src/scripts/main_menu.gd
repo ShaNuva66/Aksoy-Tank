@@ -121,6 +121,9 @@ func _apply_black_cat_theme() -> void:
 
 
 func _install_mobile_navigation() -> void:
+	stage_title_label.add_theme_font_size_override("font_size", 26)
+	stage_detail_label.add_theme_font_size_override("font_size", 20)
+	progress_label.add_theme_font_size_override("font_size", 20)
 	previous_mode_button.hide()
 	next_mode_button.hide()
 	session_mode_label.hide()
@@ -314,7 +317,10 @@ func _install_settings_ui() -> void:
 	_settings_overlay.add_child(center)
 
 	_settings_panel = PanelContainer.new()
-	_settings_panel.custom_minimum_size = Vector2(520.0, 0.0)
+	_settings_panel.custom_minimum_size = Vector2(600.0, 0.0)
+	var settings_theme := Theme.new()
+	settings_theme.default_font_size = 26
+	_settings_panel.theme = settings_theme
 	center.add_child(_settings_panel)
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 34)
@@ -329,7 +335,7 @@ func _install_settings_ui() -> void:
 	var title := Label.new()
 	title.text = "AYARLAR"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 28)
+	title.add_theme_font_size_override("font_size", 32)
 	title.add_theme_color_override("font_color", BlackCatTheme.ACCENT_SOFT)
 	column.add_child(title)
 	_music_slider = _add_volume_row(column, "MÜZİK", GameSession.get_music_volume())
@@ -353,6 +359,9 @@ func _install_settings_ui() -> void:
 	_settings_close_button.text = "TAMAM"
 	_settings_close_button.pressed.connect(_close_settings)
 	column.add_child(_settings_close_button)
+	for control in [_haptics_toggle, _reduced_motion_toggle, _privacy_button, _settings_close_button]:
+		control.custom_minimum_size.y = 56
+		control.add_theme_font_size_override("font_size", 26)
 	_music_slider.value_changed.connect(func(value: float): GameSession.set_music_volume(value / 100.0))
 	_sfx_slider.value_changed.connect(func(value: float): GameSession.set_sfx_volume(value / 100.0))
 	_effects_slider.value_changed.connect(func(value: float): GameSession.set_effects_intensity(value / 100.0))
@@ -379,9 +388,10 @@ func _add_volume_row(parent: VBoxContainer, label_text: String, value: float) ->
 	parent.add_child(row)
 	var label := Label.new()
 	label.text = label_text
-	label.custom_minimum_size = Vector2(120.0, 0.0)
+	label.custom_minimum_size = Vector2(190.0, 0.0)
+	label.add_theme_font_size_override("font_size", 26)
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.add_theme_color_override("font_color", BlackCatTheme.MUTED)
+	label.add_theme_color_override("font_color", BlackCatTheme.TEXT)
 	row.add_child(label)
 	var slider := HSlider.new()
 	slider.min_value = 0.0

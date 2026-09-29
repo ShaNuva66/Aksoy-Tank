@@ -140,6 +140,9 @@ var _lobby_label: Label = null
 var _story_button: Button = null
 var _online_countdown_tween: Tween = null
 var _paused := false
+var _auto_advance_remaining := -1.0
+var _scene_transition_started := false
+var _application_active := true
 var _previous_quit_on_go_back := true
 var _heart_hud: Control = null
 var _damage_overlay: Control = null
@@ -281,6 +284,12 @@ func _exit_tree() -> void:
 
 
 func _process(delta: float) -> void:
+	if _auto_advance_remaining > 0.0 and _application_active and not _scene_transition_started:
+		_auto_advance_remaining = maxf(0.0, _auto_advance_remaining - delta)
+		next_stage_button.text = "SONRAKI BOLUM (%d)" % ceili(_auto_advance_remaining)
+		if _auto_advance_remaining <= 0.0:
+			_go_to_next_stage()
+			return
 	if _lobby_label:
 		_lobby_label.visible = _waiting_for_peer and _online_start_remaining < 0.0 and not _paused and not _match_over
 	_update_shield_hud(delta)
@@ -959,7 +968,9 @@ func _finish_match(player_won: bool, title: String, subtitle: String) -> void:
 		_status_text = "Zafer" if player_won else "Kayip"
 	status_label.text = "Durum: " + _status_text
 	result_overlay.visible = true
-	next_stage_button.visible = local_won and not _is_vs_mode() and GameSession.has_next_stage()
+	next_stage_button.visible = local_won and not _is_vs_mode() and int(_stage_data.get("index", 0)) + 1 < GameSession.get_stage_count()
+	if next_stage_button.visible and not _is_online_mode() and not _capture_requested:
+		_auto_advance_remaining = 3.0
 	if _is_online_mode() and not _is_vs_mode():
 		retry_button.visible = not next_stage_button.visible
 	_refresh_pause_button_visibility()
@@ -1243,18 +1254,29 @@ func _change_to_arena() -> void:
 
 
 func _restart_level() -> void:
+	if _scene_transition_started:
+		return
+	_scene_transition_started = true
+	_auto_advance_remaining = -1.0
+	GameSession.set_selected_stage(int(_stage_data.get("index", 0)))
 	if _paused:
 		_set_pause_state(false)
 	get_tree().change_scene_to_file("res://src/scenes/prototype_arena.tscn")
 
 
 func _go_to_next_stage() -> void:
+	if _scene_transition_started or not _match_over or not next_stage_button.visible:
+		return
 	if _is_online_mode():
 		_on_retry_requested()
 		return
 	if _paused:
 		_set_pause_state(false)
-	if GameSession.advance_to_next_stage():
+	var next_index := int(_stage_data.get("index", 0)) + 1
+	if GameSession.is_stage_unlocked(next_index):
+		_scene_transition_started = true
+		_auto_advance_remaining = -1.0
+		GameSession.set_selected_stage(next_index)
 		get_tree().change_scene_to_file("res://src/scenes/prototype_arena.tscn")
 
 
@@ -1264,6 +1286,10 @@ func _return_to_story() -> void:
 
 
 func _go_to_main_menu() -> void:
+	if _scene_transition_started:
+		return
+	_scene_transition_started = true
+	_auto_advance_remaining = -1.0
 	if _paused:
 		_set_pause_state(false)
 	if _is_online_mode():
@@ -1343,6 +1369,10 @@ func _refresh_pause_button_visibility() -> void:
 
 
 func _notification(what: int) -> void:
+	if what in [NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_APPLICATION_PAUSED]:
+		_application_active = false
+	elif what in [NOTIFICATION_APPLICATION_FOCUS_IN, NOTIFICATION_APPLICATION_RESUMED]:
+		_application_active = true
 	if not is_node_ready() or _match_over or _capture_requested:
 		return
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
@@ -1408,14 +1438,14 @@ func _build_result_subtitle(player_won: bool, subtitle: String, unlocked_new_sta
 	if _is_vs_mode():
 		return subtitle
 	if not player_won:
-		return subtitle + " R ile tekrar dene."
+		return subtitle
 
-	if GameSession.has_next_stage():
-		var next_stage: Dictionary = GameSession.get_stage(GameSession.selected_stage_index + 1)
-		var unlocked_note := " Yeni stage acildi." if unlocked_new_stage else ""
-		return subtitle + unlocked_note + " Sonraki hedef: %s. N ile gec." % next_stage["name"]
+	if int(_stage_data.get("index", 0)) + 1 < GameSession.get_stage_count():
+		var next_stage: Dictionary = GameSession.get_stage(int(_stage_data.get("index", 0)) + 1)
+		var unlocked_note := " Yeni bolum acildi." if unlocked_new_stage else ""
+		return subtitle + unlocked_note + " Sonraki bolum: %s." % next_stage["name"]
 
-	return subtitle + " Tum campaign temizlendi."
+	return subtitle + " Tum bolumler tamamlandi."
 
 
 func notify_enemy_destroyed_visual(at_position: Vector2, enemy_type: String) -> void:
