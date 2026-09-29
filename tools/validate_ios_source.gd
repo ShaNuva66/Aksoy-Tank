@@ -12,6 +12,7 @@ func _initialize() -> void:
 	check(preset.get_value(options, "architectures/arm64", false), "arm64 enabled")
 	check(preset.get_value(options, "application/min_ios_version", "") == "15.0", "iOS 15 minimum")
 	check(not preset.get_value(options, "privacy/tracking_enabled", true), "Tracking disabled")
+	check(preset.get_value(options, "entitlements/push_notifications", "") == "Disabled", "Push notifications explicitly disabled")
 	check(preset.get_value(options, "application/export_project_only", false), "Project-only export")
 	check(ProjectSettings.has_setting("autoload/AudioManager"), "Audio autoload present")
 	check(ProjectSettings.get_setting("display/window/handheld/orientation", -1) == 0, "Landscape orientation")
