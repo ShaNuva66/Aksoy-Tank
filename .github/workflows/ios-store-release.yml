@@ -1,6 +1,12 @@
 name: iOS Store Release
 on:
   workflow_dispatch:
+    inputs:
+      action:
+        type: choice
+        default: audit
+        options: [audit, prepare, submit]
+        description: Release action for tested 2.0.7 build 37
 permissions:
   contents: read
 concurrency:
@@ -21,6 +27,7 @@ jobs:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          RELEASE_ACTION: ${{ inputs.action }}
         run: |
           set -euo pipefail
           export ASC_KEY_PATH="$RUNNER_TEMP/asc-release.p8"
