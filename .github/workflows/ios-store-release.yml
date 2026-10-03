@@ -5,7 +5,7 @@ on:
       action:
         type: choice
         default: audit
-        options: [audit, prepare, submit]
+        options: [audit, prepare, submit, subtitles]
         description: Release action for tested 2.0.7 build 37
 permissions:
   contents: read
@@ -34,4 +34,8 @@ jobs:
           trap 'rm -f "$ASC_KEY_PATH"' EXIT
           printf '%s' "$APP_STORE_CONNECT_PRIVATE_KEY" > "$ASC_KEY_PATH"
           chmod 600 "$ASC_KEY_PATH"
-          python tools/asc_store_release.py
+          if [ "$RELEASE_ACTION" = "subtitles" ]; then
+            python tools/asc_subtitles.py
+          else
+            python tools/asc_store_release.py
+          fi
